@@ -167,8 +167,8 @@ export function CustomizationBar({
     { name: 'emerald', class: 'bg-emerald-500' },
     { name: 'purple', class: 'bg-purple-500' },
     { name: 'orange', class: 'bg-orange-500' },
-    { name: 'pink', class: 'bg-pink-500' },
     { name: 'cyan', class: 'bg-cyan-500' },
+    { name: 'pink', class: 'bg-pink-500' },
   ];
 
   // Close emoji picker when clicking outside

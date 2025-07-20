@@ -52,14 +52,14 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         'emerald': 'text-emerald-400 bg-emerald-900/70 border-emerald-600/50',
         'purple': 'text-purple-400 bg-purple-900/70 border-purple-600/50',
         'orange': 'text-orange-400 bg-orange-900/70 border-orange-600/50',
-        'pink': 'text-pink-400 bg-pink-900/70 border-pink-600/50',
         'cyan': 'text-cyan-400 bg-cyan-900/70 border-cyan-600/50',
+        'pink': 'text-pink-400 bg-pink-900/70 border-pink-600/50',
       };
       return colorMap[customColor] || colorMap['blue'];
     }
 
     const colors = [
-      'text-indigo-400 bg-indigo-900/70 border-indigo-600/50',
+      'text-blue-400 bg-blue-900/70 border-blue-600/50',
       'text-emerald-400 bg-emerald-900/70 border-emerald-600/50',
       'text-purple-400 bg-purple-900/70 border-purple-600/50',
       'text-orange-400 bg-orange-900/70 border-orange-600/50',
