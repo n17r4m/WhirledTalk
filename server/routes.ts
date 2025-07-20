@@ -49,7 +49,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         switch (validatedMessage.type) {
           case 'keystroke':
             // Broadcast keystroke to all clients in the same room
-            broadcastToRoom(validatedMessage.room, validatedMessage, ws);
+            broadcastToRoom(validatedMessage.room, {
+              type: 'keystroke',
+              username: validatedMessage.username,
+              content: validatedMessage.content,
+              room: validatedMessage.room,
+              isTyping: validatedMessage.isTyping,
+              yPosition: validatedMessage.yPosition,
+              userColor: validatedMessage.userColor,
+              fontSize: validatedMessage.fontSize,
+            }, ws);
             break;
             
           case 'newMessage':
@@ -64,7 +73,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 yPosition: validatedMessage.yPosition,
               });
             }
-            broadcastToRoom(validatedMessage.room, validatedMessage, ws);
+            broadcastToRoom(validatedMessage.room, {
+              type: 'newMessage',
+              username: validatedMessage.username,
+              content: validatedMessage.content,
+              room: validatedMessage.room,
+              yPosition: validatedMessage.yPosition,
+              userColor: validatedMessage.userColor,
+              fontSize: validatedMessage.fontSize,
+            }, ws);
             break;
             
           case 'join':

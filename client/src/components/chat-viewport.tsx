@@ -48,8 +48,8 @@ export function ChatViewport({ messages, typingMessages, currentUser, userSettin
               yPosition: data.yPosition,
             }}
             isTyping={true}
-            userColor={username === currentUser ? userSettings?.color : undefined}
-            fontSize={username === currentUser ? userSettings?.fontSize : undefined}
+            userColor={username === currentUser ? userSettings?.color : data.userColor}
+            fontSize={username === currentUser ? userSettings?.fontSize : data.fontSize}
           />
         ))}
       </div>

@@ -33,6 +33,8 @@ export const wsMessageSchema = z.object({
   room: z.string().default("global"),
   isTyping: z.boolean().optional(),
   yPosition: z.number().optional(),
+  userColor: z.string().optional(),
+  fontSize: z.string().optional(),
 });
 
 export type WSMessage = z.infer<typeof wsMessageSchema>;

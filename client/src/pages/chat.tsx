@@ -16,7 +16,7 @@ export default function Chat() {
   });
   
   const [messages, setMessages] = useState<Message[]>([]);
-  const [typingMessages, setTypingMessages] = useState(new Map<string, { content: string; yPosition: number; username: string }>());
+  const [typingMessages, setTypingMessages] = useState(new Map<string, { content: string; yPosition: number; username: string; userColor?: string; fontSize?: string }>());
   const [fontSize, setFontSize] = useState(params.size);
   const [textColor, setTextColor] = useState(params.color);
 
@@ -33,6 +33,8 @@ export default function Chat() {
                 content: wsMessage.content || '',
                 yPosition: wsMessage.yPosition || existing?.yPosition || Math.random() * 70 + 15,
                 username: wsMessage.username,
+                userColor: wsMessage.userColor,
+                fontSize: wsMessage.fontSize,
               });
             }
             return newMap;
@@ -42,6 +44,9 @@ export default function Chat() {
         
       case 'newMessage':
         if (wsMessage.username !== username && wsMessage.content) {
+          // Get the typing message position to maintain it
+          const typingMessage = typingMessages.get(wsMessage.username);
+          
           // Remove from typing and add to completed messages
           setTypingMessages(prev => {
             const newMap = new Map(prev);
@@ -57,7 +62,7 @@ export default function Chat() {
             isTyping: false,
             timestamp: new Date(),
             xPosition: 0,
-            yPosition: wsMessage.yPosition || Math.random() * 80 + 10,
+            yPosition: wsMessage.yPosition || typingMessage?.yPosition || Math.random() * 70 + 15,
           }]);
         }
         break;
@@ -86,15 +91,19 @@ export default function Chat() {
 
   const handleSendKeystroke = useCallback((content: string, isComplete: boolean) => {
     if (isComplete) {
-      // Send new message event with random Y position
-      const yPosition = Math.random() * 70 + 15; // 15-85% of viewport height for better visibility
+      // Get the current typing position to maintain it for the completed message
+      const currentTyping = typingMessages.get(username);
+      const yPosition = currentTyping?.yPosition || Math.random() * 70 + 15;
+      
       sendMessage({
         type: 'newMessage',
         content,
         yPosition,
+        userColor: textColor,
+        fontSize: fontSize,
       });
       
-      // Add to local messages immediately with unique key
+      // Add to local messages immediately with the same Y position as typing
       setMessages(prev => [...prev, {
         id: Date.now() + Math.random(), // Ensure unique ID
         username,
@@ -106,14 +115,14 @@ export default function Chat() {
         yPosition,
       }]);
 
-      // Clear any typing indicator for this user
+      // Clear typing indicator and immediately start new typing position for next message
       setTypingMessages(prev => {
         const newMap = new Map(prev);
         newMap.delete(username);
         return newMap;
       });
     } else {
-      // Send keystroke event with current Y position for continuity
+      // Send keystroke event with current Y position for continuity or new random position
       const currentTyping = typingMessages.get(username);
       const yPosition = currentTyping?.yPosition || Math.random() * 70 + 15;
       
@@ -122,6 +131,8 @@ export default function Chat() {
         content,
         isTyping: true,
         yPosition,
+        userColor: textColor,
+        fontSize: fontSize,
       });
 
       // Update local typing state
@@ -131,11 +142,13 @@ export default function Chat() {
           content,
           yPosition,
           username,
+          userColor: textColor,
+          fontSize: fontSize,
         });
         return newMap;
       });
     }
-  }, [sendMessage, username, params.room, typingMessages]);
+  }, [sendMessage, username, params.room, typingMessages, textColor, fontSize]);
 
   // Load recent messages on mount
   useEffect(() => {
