@@ -77,14 +77,14 @@ export function CustomizationBar({
       clearTimeout(idleTimeoutRef.current);
     }
     
-    // Set new idle timeout - auto-complete message after 10 seconds of inactivity
+    // Set new idle timeout - auto-complete message after 15 seconds of inactivity
     if (value.trim()) {
       idleTimeoutRef.current = setTimeout(() => {
         if (currentMessage.trim()) {
           onSendKeystroke(currentMessage, true);
           setCurrentMessage('');
         }
-      }, 10000); // 10 seconds of idle time
+      }, 15000); // 15 seconds of idle time
     }
   };
 
@@ -107,7 +107,7 @@ export function CustomizationBar({
           onSendKeystroke(currentMessage, true);
           setCurrentMessage('');
         }
-      }, 10000);
+      }, 15000);
     }
   };
 
@@ -161,7 +161,7 @@ export function CustomizationBar({
             <div className="relative flex">
               <input
                 type="text"
-                placeholder="Type to chat... (auto-completes after 10s idle)"
+                placeholder="Type to chat..."
                 value={currentMessage}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
@@ -176,7 +176,7 @@ export function CustomizationBar({
                   😊
                 </button>
                 <div className="text-xs text-gray-500">
-                  {currentMessage.trim() ? '10s' : '⏎'}
+                  {currentMessage.trim() ? '15s' : '⏎'}
                 </div>
               </div>
             </div>

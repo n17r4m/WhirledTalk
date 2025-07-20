@@ -38,7 +38,7 @@ Preferred communication style: Simple, everyday language.
 - **Animation**: Messages scroll horizontally across the screen
 - **Rooms**: Support for multiple chat rooms via URL parameters
 - **Typing Indicators**: Live keystroke broadcasting to other users
-- **Auto-completion**: Messages auto-complete after 10 seconds of idle time
+- **Auto-completion**: Messages auto-complete after 15 seconds of idle time
 - **Spam Protection**: Rate limiting and paste detection to prevent abuse
 
 ### UI Components

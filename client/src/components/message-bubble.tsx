@@ -14,28 +14,36 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
 
   useEffect(() => {
     if (elementRef.current) {
-      // Set initial position and start animation
       const element = elementRef.current;
       element.style.top = `${message.yPosition}%`;
-      element.style.right = '0px'; // Start from right edge
-      element.style.left = 'auto';
       
-      // Animate to the left
-      const animation = element.animate([
-        { transform: 'translateX(0)' },
-        { transform: 'translateX(calc(-100vw - 100%))' }
-      ], {
-        duration: 20000, // 20 seconds to cross screen - slower for better readability
-        easing: 'linear',
-        fill: 'forwards'
-      });
+      // Only start animation for completed messages, not typing ones
+      if (!isTyping) {
+        element.style.right = '0px'; // Start from right edge
+        element.style.left = 'auto';
+        
+        // Animate to the left
+        const animation = element.animate([
+          { transform: 'translateX(0)' },
+          { transform: 'translateX(calc(-100vw - 100%))' }
+        ], {
+          duration: 20000, // 20 seconds to cross screen
+          easing: 'linear',
+          fill: 'forwards'
+        });
 
-      // Clean up animation on unmount
-      return () => {
-        animation.cancel();
-      };
+        // Clean up animation on unmount
+        return () => {
+          animation.cancel();
+        };
+      } else {
+        // For typing messages, position at right edge without animation
+        element.style.right = '0px';
+        element.style.left = 'auto';
+        element.style.transform = 'translateX(0)';
+      }
     }
-  }, [message.yPosition, message.content]);
+  }, [message.yPosition, isTyping]);
 
   const getUserColor = (username: string, customColor?: string) => {
     if (customColor) {
