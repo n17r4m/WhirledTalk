@@ -117,3 +117,11 @@ Preferred communication style: Simple, everyday language.
 - **Storage**: Ready for database migration from in-memory to PostgreSQL
 - **Real-time**: Room-based message broadcasting for performance
 - **Cleanup**: Automatic old message deletion to manage memory usage
+
+### Security and Session Management
+- **User Identity**: Browser fingerprinting and session-based authentication prevent impersonation
+- **Name Ownership**: Usernames are claimed per room with session tracking and timeout management
+- **Cross-Tab Support**: Same browser can use same or different names across tabs
+- **Session Handoff**: Automatic name transfer when user reconnects before session expires
+- **Anti-Impersonation**: Different users cannot claim names already taken by others
+- **Session Timeout**: 30-minute timeout releases username ownership automatically

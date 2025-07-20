@@ -29,7 +29,7 @@ export type Message = typeof messages.$inferSelect;
 
 // WebSocket message types
 export const wsMessageSchema = z.object({
-  type: z.enum(["keystroke", "newMessage", "join", "leave"]),
+  type: z.enum(["keystroke", "newMessage", "join", "leave", "nameError"]),
   username: z.string(),
   content: z.string().optional(),
   room: z.string().default("global"),
@@ -37,6 +37,19 @@ export const wsMessageSchema = z.object({
   yPosition: z.number().optional(),
   userColor: z.string().optional(),
   fontSize: z.string().optional(),
+  sessionId: z.string().optional(),
+  browserFingerprint: z.string().optional(),
+  error: z.string().optional(),
 });
 
 export type WSMessage = z.infer<typeof wsMessageSchema>;
+
+// Session management types
+export interface UserSession {
+  sessionId: string;
+  username: string;
+  room: string;
+  browserFingerprint: string;
+  lastSeen: number;
+  connectionCount: number;
+}

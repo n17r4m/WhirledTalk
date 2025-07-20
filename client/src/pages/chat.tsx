@@ -21,6 +21,7 @@ export default function Chat() {
   const [typingMessages, setTypingMessages] = useState(new Map<string, { content: string; yPosition: number; username: string; userColor?: string; fontSize?: string }>());
   const [occupiedPositions, setOccupiedPositions] = useState<Array<{ yPosition: number; timestamp: number; height: number }>>([]);
   const [isReplaying, setIsReplaying] = useState(false);
+  const [nameError, setNameError] = useState<string>('');
   const [fontSize, setFontSize] = useState(() => {
     const saved = localStorage.getItem('whirledtalk-font-size');
     return saved || params.size;
@@ -270,6 +271,11 @@ export default function Chat() {
     room: params.room,
     username,
     onMessage: handleWebSocketMessage,
+    onNameError: (error) => {
+      setNameError(error);
+      // Auto-clear after 5 seconds
+      setTimeout(() => setNameError(''), 5000);
+    },
   });
 
 
@@ -455,6 +461,16 @@ export default function Chat() {
           <div className="flex items-center gap-3">
             <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-gray-300">Replaying chat history...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Name Error Indicator */}
+      {nameError && (
+        <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-red-900/95 backdrop-blur-md px-6 py-4 rounded-xl text-sm border border-red-600/50 shadow-lg animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+            <span className="text-red-200">{nameError}</span>
           </div>
         </div>
       )}
