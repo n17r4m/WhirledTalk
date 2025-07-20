@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { ConnectionStatus } from '@/components/connection-status';
 import { RoomIndicator } from '@/components/room-indicator';
 import { ChatViewport } from '@/components/chat-viewport';
@@ -25,6 +25,7 @@ export default function Chat() {
   const [validUsername, setValidUsername] = useState(username); // Last known valid username
   const [pendingUsername, setPendingUsername] = useState<string>(''); // Username being attempted
   const [usernameStatus, setUsernameStatus] = useState<'valid' | 'pending' | 'rejected'>('valid');
+  const pendingTimeoutRef = useRef<NodeJS.Timeout>();
   const [fontSize, setFontSize] = useState(() => {
     const saved = localStorage.getItem('whirledtalk-font-size');
     return saved || params.size;
@@ -255,14 +256,24 @@ export default function Chat() {
         break;
         
       case 'join':
-        // Username successfully validated
-        if (wsMessage.username === username) {
-          setValidUsername(username);
+        // Username successfully validated - check if this is our join
+        console.log(`${wsMessage.username} joined the room`);
+        if (wsMessage.username === username || wsMessage.username === pendingUsername) {
+          // Clear pending timeout
+          if (pendingTimeoutRef.current) {
+            clearTimeout(pendingTimeoutRef.current);
+          }
+          
+          setValidUsername(wsMessage.username);
           setUsernameStatus('valid');
           setPendingUsername('');
-          console.log(`Username "${username}" successfully validated`);
+          // Update username if it was different (successful name change)
+          if (wsMessage.username !== username) {
+            setUsername(wsMessage.username);
+            localStorage.setItem('whirledtalk-username', wsMessage.username);
+          }
+          console.log(`Username "${wsMessage.username}" successfully validated`);
         }
-        console.log(`${wsMessage.username} joined the room`);
         break;
         
       case 'leave':
@@ -275,7 +286,7 @@ export default function Chat() {
         });
         break;
     }
-  }, [username]);
+  }, [username, pendingUsername]);
 
   const { isConnected, connectedUsers, sendMessage } = useWebSocket({
     room: params.room,
@@ -284,7 +295,10 @@ export default function Chat() {
     onNameError: (error) => {
       setNameError(error);
       setUsernameStatus('rejected');
-      setPendingUsername(username);
+      // Keep the current username as pending since it was rejected
+      if (username !== validUsername) {
+        setPendingUsername(username);
+      }
       // Auto-clear error after 5 seconds, but keep status
       setTimeout(() => setNameError(''), 5000);
     },
@@ -308,13 +322,29 @@ export default function Chat() {
 
   // Handle username changes with localStorage persistence and validation
   const handleUsernameChange = useCallback((newUsername: string) => {
-    if (newUsername !== validUsername) {
+    // Clear any existing timeout
+    if (pendingTimeoutRef.current) {
+      clearTimeout(pendingTimeoutRef.current);
+    }
+    
+    if (newUsername !== validUsername && newUsername !== username) {
       setUsernameStatus('pending');
       setPendingUsername(newUsername);
+      
+      // Set timeout to reset to valid state if no response in 10 seconds
+      pendingTimeoutRef.current = setTimeout(() => {
+        setUsernameStatus('valid');
+        setPendingUsername('');
+        console.log('Username validation timeout - assuming valid');
+      }, 10000);
+    } else if (newUsername === validUsername) {
+      // Going back to a known valid username
+      setUsernameStatus('valid');
+      setPendingUsername('');
     }
     setUsername(newUsername);
     localStorage.setItem('whirledtalk-username', newUsername);
-  }, [validUsername]);
+  }, [validUsername, username]);
 
   // Style synchronization across tabs for same username
   const { broadcastStyleChange } = useStyleSync({
@@ -457,6 +487,15 @@ export default function Chat() {
       })
       .catch(console.error);
   }, [params.room]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingTimeoutRef.current) {
+        clearTimeout(pendingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className={`h-full w-full flex flex-col relative ${themeClasses.background} ${themeClasses.font}`}>
