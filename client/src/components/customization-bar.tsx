@@ -28,21 +28,17 @@ export function CustomizationBar({
         onSendKeystroke(currentMessage, true);
         setCurrentMessage('');
       }
-    } else {
-      // Only send printable characters (letters, numbers, symbols, spaces)
-      // Exclude control keys like Control, Alt, Shift, Backspace, etc.
-      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        const newContent = currentMessage + e.key;
-        setCurrentMessage(newContent);
-        onSendKeystroke(newContent, false);
-      }
     }
+    // Remove all other keystroke handling from here to avoid duplicates
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setCurrentMessage(value);
-    onSendKeystroke(value, false);
+    // Only send keystroke if the content actually changed
+    if (value !== currentMessage) {
+      onSendKeystroke(value, false);
+    }
   };
 
   const colorOptions = [

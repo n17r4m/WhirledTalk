@@ -26,11 +26,15 @@ export default function Chat() {
         if (wsMessage.username !== username && wsMessage.content !== undefined) {
           setTypingMessages(prev => {
             const newMap = new Map(prev);
-            newMap.set(wsMessage.username, {
-              content: wsMessage.content || '',
-              yPosition: wsMessage.yPosition || Math.random() * 80 + 10, // 10-90% of viewport height
-              username: wsMessage.username,
-            });
+            // Only update if content is different to reduce unnecessary re-renders
+            const existing = newMap.get(wsMessage.username);
+            if (!existing || existing.content !== wsMessage.content) {
+              newMap.set(wsMessage.username, {
+                content: wsMessage.content || '',
+                yPosition: wsMessage.yPosition || existing?.yPosition || Math.random() * 70 + 15,
+                username: wsMessage.username,
+              });
+            }
             return newMap;
           });
         }
