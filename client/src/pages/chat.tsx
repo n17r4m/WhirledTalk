@@ -195,7 +195,7 @@ export default function Chat() {
   const handleWebSocketMessage = useCallback((wsMessage: WSMessage) => {
     switch (wsMessage.type) {
       case 'keystroke':
-        if (wsMessage.username !== username && wsMessage.content !== undefined) {
+        if (wsMessage.content !== undefined) {
           setTypingMessages(prev => {
             const newMap = new Map(prev);
             // Only update if content is different to reduce unnecessary re-renders
@@ -215,7 +215,7 @@ export default function Chat() {
         break;
         
       case 'newMessage':
-        if (wsMessage.username !== username && wsMessage.content) {
+        if (wsMessage.content) {
           // Get the typing message position to maintain it
           const typingMessage = typingMessages.get(wsMessage.username);
           const yPosition = wsMessage.yPosition || typingMessage?.yPosition || findOptimalPosition();
