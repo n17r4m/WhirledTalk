@@ -25,17 +25,19 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         element.style.right = '0px';
         element.style.left = 'auto';
         element.style.transform = 'translateX(0)';
-      } else if (isPreloadedMessage) {
-        // For pre-loaded messages, position horizontally based on age (staggered)
-        element.style.left = `${message.xPosition}%`;
-        element.style.right = 'auto';
-        element.style.transform = 'translateX(0)';
       } else {
-        // For new messages, start from right edge and animate left
-        element.style.right = '0px';
-        element.style.left = 'auto';
+        // For all completed messages (both preloaded and new), animate to the left
+        if (isPreloadedMessage) {
+          // Pre-loaded messages start from their staggered position
+          element.style.left = `${message.xPosition}%`;
+          element.style.right = 'auto';
+        } else {
+          // New messages start from right edge
+          element.style.right = '0px';
+          element.style.left = 'auto';
+        }
         
-        // Animate to the left
+        // Animate to the left from current position
         const animation = element.animate([
           { transform: 'translateX(0)' },
           { transform: 'translateX(calc(-100vw - 100%))' }
