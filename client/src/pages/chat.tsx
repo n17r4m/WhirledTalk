@@ -17,8 +17,113 @@ export default function Chat() {
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [typingMessages, setTypingMessages] = useState(new Map<string, { content: string; yPosition: number; username: string; userColor?: string; fontSize?: string }>());
+  const [occupiedPositions, setOccupiedPositions] = useState<Array<{ yPosition: number; timestamp: number; height: number }>>([]);
   const [fontSize, setFontSize] = useState(params.size);
   const [textColor, setTextColor] = useState(params.color);
+
+  // Smart positioning algorithm
+  const findOptimalPosition = useCallback((): number => {
+    const now = Date.now();
+    const messageLifetime = 25000; // 25 seconds for messages to cross screen
+    const minSpacing = 8; // Minimum percentage spacing between messages
+    const messageHeight = 6; // Approximate message height in percentage
+    const viewportUsable = 70; // Use 70% of viewport (15% margin top/bottom)
+    const viewportStart = 15; // Start at 15% from top
+    
+    // Clean up expired positions
+    const activePositions = occupiedPositions.filter(pos => 
+      now - pos.timestamp < messageLifetime
+    );
+    
+    // Update state with cleaned positions
+    setOccupiedPositions(activePositions);
+    
+    // Sort positions by Y coordinate
+    const sortedPositions = [...activePositions].sort((a, b) => a.yPosition - b.yPosition);
+    
+    // Try to find gaps between existing messages
+    const candidates: Array<{ yPosition: number; score: number }> = [];
+    
+    // Add position before first message
+    if (sortedPositions.length === 0 || sortedPositions[0].yPosition > viewportStart + messageHeight + minSpacing) {
+      const pos = viewportStart + Math.random() * 20; // Some randomness in top area
+      candidates.push({ yPosition: pos, score: 100 - Math.abs(pos - 30) }); // Prefer middle-ish
+    }
+    
+    // Look for gaps between messages
+    for (let i = 0; i < sortedPositions.length - 1; i++) {
+      const current = sortedPositions[i];
+      const next = sortedPositions[i + 1];
+      const gapSize = next.yPosition - (current.yPosition + current.height);
+      
+      if (gapSize >= messageHeight + minSpacing * 2) {
+        // Found a suitable gap
+        const gapStart = current.yPosition + current.height + minSpacing;
+        const gapEnd = next.yPosition - messageHeight - minSpacing;
+        const centerPos = gapStart + (gapEnd - gapStart) / 2;
+        
+        // Add some randomness but prefer center of gap
+        const randomOffset = (Math.random() - 0.5) * Math.min(gapSize * 0.3, 15);
+        const pos = Math.max(gapStart, Math.min(gapEnd, centerPos + randomOffset));
+        
+        // Score based on gap size and position quality
+        const sizeScore = Math.min(gapSize / 20, 1) * 50;
+        const positionScore = 50 - Math.abs(pos - 50) / 2; // Prefer middle of screen
+        candidates.push({ yPosition: pos, score: sizeScore + positionScore });
+      }
+    }
+    
+    // Add position after last message
+    const lastPos = sortedPositions.length > 0 ? sortedPositions[sortedPositions.length - 1] : null;
+    const lastEnd = lastPos ? lastPos.yPosition + lastPos.height : viewportStart;
+    if (lastEnd + messageHeight + minSpacing <= viewportStart + viewportUsable) {
+      const pos = lastEnd + minSpacing + Math.random() * 10;
+      candidates.push({ yPosition: pos, score: 80 - Math.abs(pos - 40) }); // Slight preference for earlier positions
+    }
+    
+    // If no good gaps, create new position with collision avoidance
+    if (candidates.length === 0) {
+      let attempts = 0;
+      while (attempts < 20) {
+        const randomPos = viewportStart + Math.random() * viewportUsable;
+        
+        // Check collision with existing messages
+        const hasCollision = sortedPositions.some(pos => 
+          Math.abs(pos.yPosition - randomPos) < messageHeight + minSpacing
+        );
+        
+        if (!hasCollision) {
+          candidates.push({ yPosition: randomPos, score: 40 + Math.random() * 20 });
+          break;
+        }
+        attempts++;
+      }
+    }
+    
+    // Fall back to completely random if all else fails
+    if (candidates.length === 0) {
+      candidates.push({ 
+        yPosition: viewportStart + Math.random() * viewportUsable, 
+        score: 20 
+      });
+    }
+    
+    // Select best candidate (with slight randomness for organic feel)
+    const sortedCandidates = candidates.sort((a, b) => b.score - a.score);
+    const topCandidates = sortedCandidates.slice(0, Math.min(3, sortedCandidates.length));
+    const weights = topCandidates.map((_, i) => Math.pow(2, topCandidates.length - i));
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+    
+    let random = Math.random() * totalWeight;
+    for (let i = 0; i < topCandidates.length; i++) {
+      random -= weights[i];
+      if (random <= 0) {
+        return Math.max(viewportStart, Math.min(viewportStart + viewportUsable - messageHeight, topCandidates[i].yPosition));
+      }
+    }
+    
+    return topCandidates[0].yPosition;
+  }, [occupiedPositions]);
 
   const handleWebSocketMessage = useCallback((wsMessage: WSMessage) => {
     switch (wsMessage.type) {
@@ -31,7 +136,7 @@ export default function Chat() {
             if (!existing || existing.content !== wsMessage.content) {
               newMap.set(wsMessage.username, {
                 content: wsMessage.content || '',
-                yPosition: wsMessage.yPosition || existing?.yPosition || Math.random() * 70 + 15,
+                yPosition: wsMessage.yPosition || existing?.yPosition || findOptimalPosition(),
                 username: wsMessage.username,
                 userColor: wsMessage.userColor,
                 fontSize: wsMessage.fontSize,
@@ -46,6 +151,14 @@ export default function Chat() {
         if (wsMessage.username !== username && wsMessage.content) {
           // Get the typing message position to maintain it
           const typingMessage = typingMessages.get(wsMessage.username);
+          const yPosition = wsMessage.yPosition || typingMessage?.yPosition || findOptimalPosition();
+          
+          // Record this position as occupied
+          setOccupiedPositions(prev => [...prev, {
+            yPosition,
+            timestamp: Date.now(),
+            height: 6
+          }]);
           
           // Remove from typing and add to completed messages
           setTypingMessages(prev => {
@@ -62,7 +175,7 @@ export default function Chat() {
             isTyping: false,
             timestamp: new Date(),
             xPosition: 0,
-            yPosition: wsMessage.yPosition || typingMessage?.yPosition || Math.random() * 70 + 15,
+            yPosition,
           }]);
         }
         break;
@@ -93,7 +206,14 @@ export default function Chat() {
     if (isComplete) {
       // Get the current typing position to maintain it for the completed message
       const currentTyping = typingMessages.get(username);
-      const yPosition = currentTyping?.yPosition || Math.random() * 70 + 15;
+      const yPosition = currentTyping?.yPosition || findOptimalPosition();
+      
+      // Record this position as occupied
+      setOccupiedPositions(prev => [...prev, {
+        yPosition,
+        timestamp: Date.now(),
+        height: 6 // Approximate message height percentage
+      }]);
       
       sendMessage({
         type: 'newMessage',
@@ -115,16 +235,16 @@ export default function Chat() {
         yPosition,
       }]);
 
-      // Clear typing indicator and immediately start new typing position for next message
+      // Clear typing indicator
       setTypingMessages(prev => {
         const newMap = new Map(prev);
         newMap.delete(username);
         return newMap;
       });
     } else {
-      // Send keystroke event with current Y position for continuity or new random position
+      // Send keystroke event with current Y position for continuity or new optimal position
       const currentTyping = typingMessages.get(username);
-      const yPosition = currentTyping?.yPosition || Math.random() * 70 + 15;
+      const yPosition = currentTyping?.yPosition || findOptimalPosition();
       
       sendMessage({
         type: 'keystroke',
@@ -148,7 +268,7 @@ export default function Chat() {
         return newMap;
       });
     }
-  }, [sendMessage, username, params.room, typingMessages, textColor, fontSize]);
+  }, [sendMessage, username, params.room, typingMessages, textColor, fontSize, findOptimalPosition]);
 
   // Load recent messages on mount
   useEffect(() => {

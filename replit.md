@@ -40,6 +40,7 @@ Preferred communication style: Simple, everyday language.
 - **Typing Indicators**: Live keystroke broadcasting to other users
 - **Auto-completion**: Messages auto-complete after 15 seconds of idle time
 - **Spam Protection**: Rate limiting and paste detection to prevent abuse
+- **Smart Positioning**: Algorithm prevents message overlap while maintaining organic feel
 
 ### UI Components
 - **Chat Viewport**: Main scrolling message area with horizontal animation
