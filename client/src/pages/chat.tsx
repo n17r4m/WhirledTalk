@@ -153,6 +153,8 @@ export default function Chat() {
       <ChatViewport 
         messages={messages} 
         typingMessages={typingMessages}
+        currentUser={username}
+        userSettings={{ color: textColor, fontSize }}
       />
       
       <CustomizationBar

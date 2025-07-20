@@ -4,10 +4,12 @@ import type { Message } from '@shared/schema';
 
 interface ChatViewportProps {
   messages: Message[];
-  typingMessages: Map<string, { content: string; yPosition: number; username: string }>;
+  typingMessages: Map<string, { content: string; yPosition: number; username: string; color?: string; fontSize?: string }>;
+  currentUser?: string;
+  userSettings?: { color: string; fontSize: string };
 }
 
-export function ChatViewport({ messages, typingMessages }: ChatViewportProps) {
+export function ChatViewport({ messages, typingMessages, currentUser, userSettings }: ChatViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,6 +28,8 @@ export function ChatViewport({ messages, typingMessages }: ChatViewportProps) {
           <MessageBubble
             key={`message-${message.id}-${message.timestamp}`}
             message={message}
+            userColor={message.username === currentUser ? userSettings?.color : undefined}
+            fontSize={message.username === currentUser ? userSettings?.fontSize : undefined}
           />
         ))}
         
@@ -44,6 +48,8 @@ export function ChatViewport({ messages, typingMessages }: ChatViewportProps) {
               yPosition: data.yPosition,
             }}
             isTyping={true}
+            userColor={username === currentUser ? userSettings?.color : undefined}
+            fontSize={username === currentUser ? userSettings?.fontSize : undefined}
           />
         ))}
       </div>

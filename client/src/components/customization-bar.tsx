@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 interface CustomizationBarProps {
   username: string;
@@ -20,6 +21,8 @@ export function CustomizationBar({
   onTextColorChange,
 }: CustomizationBarProps) {
   const [currentMessage, setCurrentMessage] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -41,6 +44,13 @@ export function CustomizationBar({
     }
   };
 
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    const newMessage = currentMessage + emojiData.emoji;
+    setCurrentMessage(newMessage);
+    onSendKeystroke(newMessage, false);
+    setShowEmojiPicker(false);
+  };
+
   const colorOptions = [
     { name: 'blue', class: 'bg-blue-500' },
     { name: 'emerald', class: 'bg-emerald-500' },
@@ -50,8 +60,18 @@ export function CustomizationBar({
     { name: 'cyan', class: 'bg-cyan-500' },
   ];
 
+  // Close emoji picker when clicking outside
+  const handleClickOutside = (e: React.MouseEvent) => {
+    if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+      setShowEmojiPicker(false);
+    }
+  };
+
   return (
-    <div className="bg-gray-800 border-t border-gray-700 px-4 py-3">
+    <div 
+      className="bg-gray-800 border-t border-gray-700 px-4 py-3 relative"
+      onClick={handleClickOutside}
+    >
       <div className="flex items-center justify-between gap-4">
         {/* User Input Section */}
         <div className="flex-1 flex items-center gap-3">
@@ -69,17 +89,45 @@ export function CustomizationBar({
 
           {/* Message Input */}
           <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Type to chat... (each keystroke is broadcast live)"
-              value={currentMessage}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-              Press Enter for new message
+            <div className="relative flex">
+              <input
+                type="text"
+                placeholder="Type to chat... (each keystroke is broadcast live)"
+                value={currentMessage}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 pr-20 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-300 transition-colors"
+                  type="button"
+                >
+                  😊
+                </button>
+                <div className="text-xs text-gray-500">
+                  ⏎
+                </div>
+              </div>
             </div>
+            
+            {/* Emoji Picker */}
+            {showEmojiPicker && (
+              <div 
+                ref={emojiPickerRef}
+                className="absolute bottom-full right-0 mb-2 z-50"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <EmojiPicker
+                  onEmojiClick={handleEmojiClick}
+                  width={300}
+                  height={400}
+                  theme="dark"
+                  previewConfig={{ showPreview: false }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -116,7 +164,10 @@ export function CustomizationBar({
           </div>
 
           {/* Settings */}
-          <button className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors border border-gray-600">
+          <button 
+            onClick={() => setShowEmojiPicker(false)}
+            className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors border border-gray-600"
+          >
             <i className="fas fa-cog text-gray-400 text-sm" />
           </button>
         </div>
