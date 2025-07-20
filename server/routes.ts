@@ -193,10 +193,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   function broadcastToRoom(room: string, message: Partial<WSMessage>, sender?: ExtendedWebSocket) {
     clients.forEach((client) => {
-      if (client !== sender && 
-          client.room === room && 
+      if (client.room === room && 
           client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(message));
+        // Send to all clients in the room, including other tabs of the same user
+        // Only exclude the exact sender WebSocket connection
+        if (client !== sender) {
+          client.send(JSON.stringify(message));
+        }
       }
     });
   }
