@@ -160,35 +160,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         const now = Date.now();
         
-        // Session and username validation
-        if (validatedMessage.type === 'join') {
-          const sessionId = validatedMessage.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const browserFingerprint = validatedMessage.browserFingerprint || 'unknown';
-          
-          const validation = validateNameOwnership(
-            validatedMessage.username, 
-            validatedMessage.room, 
-            sessionId, 
-            browserFingerprint
-          );
-          
-          if (!validation.allowed) {
-            // Send name error back to client
-            ws.send(JSON.stringify({
-              type: 'nameError',
-              username: validatedMessage.username,
-              room: validatedMessage.room,
-              error: validation.error
-            }));
-            return;
+        // Session and username validation for all message types with usernames
+        if (validatedMessage.username) {
+          // For join messages, we need session info
+          if (validatedMessage.type === 'join') {
+            const sessionId = validatedMessage.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const browserFingerprint = validatedMessage.browserFingerprint || 'unknown';
+            
+            const validation = validateNameOwnership(
+              validatedMessage.username, 
+              validatedMessage.room, 
+              sessionId, 
+              browserFingerprint
+            );
+            
+            if (!validation.allowed) {
+              // Send name error back to client
+              ws.send(JSON.stringify({
+                type: 'nameError',
+                username: validatedMessage.username,
+                room: validatedMessage.room,
+                error: validation.error
+              }));
+              return;
+            }
+            
+            // Claim the username
+            claimUsername(validatedMessage.username, validatedMessage.room, sessionId, browserFingerprint);
+            
+            // Store session info on WebSocket
+            ws.sessionId = sessionId;
+            ws.browserFingerprint = browserFingerprint;
+          } else {
+            // For other message types, validate using existing session info
+            if (ws.sessionId && ws.browserFingerprint) {
+              const validation = validateNameOwnership(
+                validatedMessage.username, 
+                validatedMessage.room, 
+                ws.sessionId, 
+                ws.browserFingerprint
+              );
+              
+              if (!validation.allowed) {
+                // Send name error back to client for any message type
+                ws.send(JSON.stringify({
+                  type: 'nameError',
+                  username: validatedMessage.username,
+                  room: validatedMessage.room,
+                  error: validation.error
+                }));
+                return;
+              }
+            }
           }
-          
-          // Claim the username
-          claimUsername(validatedMessage.username, validatedMessage.room, sessionId, browserFingerprint);
-          
-          // Store session info on WebSocket
-          ws.sessionId = sessionId;
-          ws.browserFingerprint = browserFingerprint;
         }
         
         // Enhanced content validation

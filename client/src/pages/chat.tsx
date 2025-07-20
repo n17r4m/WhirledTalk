@@ -267,6 +267,14 @@ export default function Chat() {
           setValidUsername(wsMessage.username);
           setUsernameStatus('valid');
           setPendingUsername('');
+          
+          // Show success message for name changes (but use different styling)
+          if (wsMessage.username !== validUsername) {
+            // We could add a separate success message state, but for now use nameError with different text
+            setNameError(`✓ Username changed to "${wsMessage.username}"`);
+            setTimeout(() => setNameError(''), 2000);
+          }
+          
           // Update username if it was different (successful name change)
           if (wsMessage.username !== username) {
             setUsername(wsMessage.username);
@@ -293,13 +301,17 @@ export default function Chat() {
     username,
     onMessage: handleWebSocketMessage,
     onNameError: (error) => {
+      console.log('Name error received:', error);
       setNameError(error);
       setUsernameStatus('rejected');
-      // Keep the current username as pending since it was rejected
-      if (username !== validUsername) {
-        setPendingUsername(username);
+      setPendingUsername(username);
+      
+      // Clear pending timeout since we got a definitive response
+      if (pendingTimeoutRef.current) {
+        clearTimeout(pendingTimeoutRef.current);
       }
-      // Auto-clear error after 5 seconds, but keep status
+      
+      // Auto-clear error after 5 seconds, but keep status as rejected
       setTimeout(() => setNameError(''), 5000);
     },
   });
@@ -327,24 +339,25 @@ export default function Chat() {
       clearTimeout(pendingTimeoutRef.current);
     }
     
-    if (newUsername !== validUsername && newUsername !== username) {
+    if (newUsername !== validUsername) {
       setUsernameStatus('pending');
       setPendingUsername(newUsername);
       
-      // Set timeout to reset to valid state if no response in 10 seconds
+      // Set timeout to reset to valid state if no response in 5 seconds (shorter timeout)
       pendingTimeoutRef.current = setTimeout(() => {
         setUsernameStatus('valid');
+        setValidUsername(newUsername);
         setPendingUsername('');
         console.log('Username validation timeout - assuming valid');
-      }, 10000);
-    } else if (newUsername === validUsername) {
+      }, 5000);
+    } else {
       // Going back to a known valid username
       setUsernameStatus('valid');
       setPendingUsername('');
     }
     setUsername(newUsername);
     localStorage.setItem('whirledtalk-username', newUsername);
-  }, [validUsername, username]);
+  }, [validUsername]);
 
   // Style synchronization across tabs for same username
   const { broadcastStyleChange } = useStyleSync({
@@ -531,12 +544,20 @@ export default function Chat() {
         </div>
       )}
 
-      {/* Name Error Indicator */}
+      {/* Name Error/Success Indicator */}
       {nameError && (
-        <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-red-900/95 backdrop-blur-md px-6 py-4 rounded-xl text-sm border border-red-600/50 shadow-lg animate-pulse">
+        <div className={`absolute top-8 left-1/2 transform -translate-x-1/2 backdrop-blur-md px-6 py-4 rounded-xl text-sm border shadow-lg animate-pulse ${
+          nameError.startsWith('✓') 
+            ? 'bg-green-900/95 border-green-600/50' 
+            : 'bg-red-900/95 border-red-600/50'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-            <span className="text-red-200">{nameError}</span>
+            <div className={`w-4 h-4 rounded-full ${
+              nameError.startsWith('✓') ? 'bg-green-500' : 'bg-red-500'
+            }`}></div>
+            <span className={nameError.startsWith('✓') ? 'text-green-200' : 'text-red-200'}>
+              {nameError}
+            </span>
           </div>
         </div>
       )}
