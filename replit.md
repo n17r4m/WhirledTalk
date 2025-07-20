@@ -38,6 +38,8 @@ Preferred communication style: Simple, everyday language.
 - **Animation**: Messages scroll horizontally across the screen
 - **Rooms**: Support for multiple chat rooms via URL parameters
 - **Typing Indicators**: Live keystroke broadcasting to other users
+- **Auto-completion**: Messages auto-complete after 10 seconds of idle time
+- **Spam Protection**: Rate limiting and paste detection to prevent abuse
 
 ### UI Components
 - **Chat Viewport**: Main scrolling message area with horizontal animation
@@ -50,6 +52,8 @@ Preferred communication style: Simple, everyday language.
 - **Message Types**: Support for keystrokes, complete messages, join/leave events
 - **Room Management**: Query parameter-based room switching
 - **Error Handling**: Graceful degradation when WebSocket unavailable
+- **Rate Limiting**: Server-side protection against spam (50 messages/minute max)
+- **Content Validation**: Message length limits and timing controls
 
 ## Data Flow
 

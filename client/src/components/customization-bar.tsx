@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 interface CustomizationBarProps {
@@ -22,14 +22,23 @@ export function CustomizationBar({
 }: CustomizationBarProps) {
   const [currentMessage, setCurrentMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [lastKeystroke, setLastKeystroke] = useState(Date.now());
+  const [lastMessageLength, setLastMessageLength] = useState(0);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const idleTimeoutRef = useRef<NodeJS.Timeout>();
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
+      // Clear idle timeout when manually completing
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+      
       // Complete the message and start a new one
       if (currentMessage.trim()) {
         onSendKeystroke(currentMessage, true);
         setCurrentMessage('');
+        setLastMessageLength(0);
       }
     }
     // Remove all other keystroke handling from here to avoid duplicates
@@ -37,18 +46,69 @@ export function CustomizationBar({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setCurrentMessage(value);
-    // Only send keystroke if the content actually changed
-    if (value !== currentMessage) {
-      onSendKeystroke(value, false);
+    const now = Date.now();
+    
+    // Anti-spam protection: detect large paste operations
+    const lengthDiff = Math.abs(value.length - lastMessageLength);
+    const timeDiff = now - lastKeystroke;
+    
+    // If more than 10 characters added in less than 100ms, likely a paste - limit it
+    if (lengthDiff > 10 && timeDiff < 100) {
+      // Allow paste but limit to reasonable increments
+      const maxIncrement = Math.min(lengthDiff, 3);
+      const limitedValue = value.length > currentMessage.length 
+        ? currentMessage + value.slice(currentMessage.length, currentMessage.length + maxIncrement)
+        : value;
+      setCurrentMessage(limitedValue);
+      onSendKeystroke(limitedValue, false);
+    } else {
+      setCurrentMessage(value);
+      // Only send keystroke if the content actually changed
+      if (value !== currentMessage) {
+        onSendKeystroke(value, false);
+      }
+    }
+    
+    setLastKeystroke(now);
+    setLastMessageLength(value.length);
+    
+    // Clear existing idle timeout
+    if (idleTimeoutRef.current) {
+      clearTimeout(idleTimeoutRef.current);
+    }
+    
+    // Set new idle timeout - auto-complete message after 10 seconds of inactivity
+    if (value.trim()) {
+      idleTimeoutRef.current = setTimeout(() => {
+        if (currentMessage.trim()) {
+          onSendKeystroke(currentMessage, true);
+          setCurrentMessage('');
+        }
+      }, 10000); // 10 seconds of idle time
     }
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     const newMessage = currentMessage + emojiData.emoji;
     setCurrentMessage(newMessage);
+    setLastMessageLength(newMessage.length);
+    setLastKeystroke(Date.now());
     onSendKeystroke(newMessage, false);
     setShowEmojiPicker(false);
+    
+    // Reset idle timeout for emoji insertion
+    if (idleTimeoutRef.current) {
+      clearTimeout(idleTimeoutRef.current);
+    }
+    
+    if (newMessage.trim()) {
+      idleTimeoutRef.current = setTimeout(() => {
+        if (currentMessage.trim()) {
+          onSendKeystroke(currentMessage, true);
+          setCurrentMessage('');
+        }
+      }, 10000);
+    }
   };
 
   const colorOptions = [
@@ -66,6 +126,15 @@ export function CustomizationBar({
       setShowEmojiPicker(false);
     }
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div 
@@ -92,7 +161,7 @@ export function CustomizationBar({
             <div className="relative flex">
               <input
                 type="text"
-                placeholder="Type to chat... (each keystroke is broadcast live)"
+                placeholder="Type to chat... (auto-completes after 10s idle)"
                 value={currentMessage}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
@@ -107,7 +176,7 @@ export function CustomizationBar({
                   😊
                 </button>
                 <div className="text-xs text-gray-500">
-                  ⏎
+                  {currentMessage.trim() ? '10s' : '⏎'}
                 </div>
               </div>
             </div>

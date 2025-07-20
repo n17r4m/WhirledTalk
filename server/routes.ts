@@ -7,6 +7,9 @@ import { wsMessageSchema, type WSMessage } from "@shared/schema";
 interface ExtendedWebSocket extends WebSocket {
   username?: string;
   room?: string;
+  lastMessageTime?: number;
+  messageCount?: number;
+  lastResetTime?: number;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -29,9 +32,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rate limiting helper
+  const checkRateLimit = (ws: ExtendedWebSocket): boolean => {
+    const now = Date.now();
+    const windowMs = 60000; // 1 minute window
+    const maxMessages = 50; // Max 50 messages per minute
+    
+    // Reset counter if window has passed
+    if (!ws.lastResetTime || now - ws.lastResetTime > windowMs) {
+      ws.messageCount = 0;
+      ws.lastResetTime = now;
+    }
+    
+    ws.messageCount = (ws.messageCount || 0) + 1;
+    
+    if (ws.messageCount > maxMessages) {
+      return false; // Rate limit exceeded
+    }
+    
+    return true;
+  };
+
   wss.on('connection', (ws: ExtendedWebSocket, req) => {
     console.log('New WebSocket connection');
     clients.add(ws);
+    
+    // Initialize rate limiting
+    ws.messageCount = 0;
+    ws.lastResetTime = Date.now();
+    ws.lastMessageTime = Date.now();
     
     // Extract room from query params
     const url = new URL(req.url || '', `http://${req.headers.host}`);
@@ -40,11 +69,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     ws.on('message', async (data) => {
       try {
+        // Check rate limit
+        if (!checkRateLimit(ws)) {
+          console.log(`Rate limit exceeded for user ${ws.username}`);
+          return;
+        }
+        
         const message = JSON.parse(data.toString()) as WSMessage;
         const validatedMessage = wsMessageSchema.parse(message);
         
+        // Additional spam protection - prevent too frequent messages
+        const now = Date.now();
+        if (ws.lastMessageTime && now - ws.lastMessageTime < 50) { // Min 50ms between messages
+          return;
+        }
+        
+        // Content validation - basic spam detection
+        if (validatedMessage.content && validatedMessage.content.length > 500) {
+          console.log(`Message too long from user ${validatedMessage.username}`);
+          return;
+        }
+        
         ws.username = validatedMessage.username;
         ws.room = validatedMessage.room;
+        ws.lastMessageTime = now;
 
         switch (validatedMessage.type) {
           case 'keystroke':
