@@ -6,6 +6,7 @@ import { CustomizationBar } from '@/components/customization-bar';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useQueryParams } from '@/hooks/use-query-params';
 import type { Message, WSMessage } from '@shared/schema';
+import { useStyleSync } from '@/hooks/use-style-sync';
 
 export default function Chat() {
   const { params, getThemeClasses } = useQueryParams();
@@ -268,16 +269,20 @@ export default function Chat() {
     onMessage: handleWebSocketMessage,
   });
 
-  // Handle font size changes with localStorage persistence
-  const handleFontSizeChange = useCallback((newSize: string) => {
-    setFontSize(newSize);
-    localStorage.setItem('whirledtalk-font-size', newSize);
-  }, []);
 
-  // Handle color changes with localStorage persistence  
+
+  // Handle color changes with localStorage persistence and cross-tab sync
   const handleTextColorChange = useCallback((newColor: string) => {
     setTextColor(newColor);
     localStorage.setItem('whirledtalk-text-color', newColor);
+    // Broadcast to other tabs will be handled by useStyleSync
+  }, []);
+
+  // Handle font size changes with localStorage persistence and cross-tab sync
+  const handleFontSizeChangeWithSync = useCallback((newSize: string) => {
+    setFontSize(newSize);
+    localStorage.setItem('whirledtalk-font-size', newSize);
+    // Broadcast to other tabs will be handled by useStyleSync
   }, []);
 
   // Handle username changes with localStorage persistence
@@ -285,6 +290,20 @@ export default function Chat() {
     setUsername(newUsername);
     localStorage.setItem('whirledtalk-username', newUsername);
   }, []);
+
+  // Style synchronization across tabs for same username
+  const { broadcastStyleChange } = useStyleSync({
+    username,
+    textColor,
+    fontSize,
+    onTextColorChange: handleTextColorChange,
+    onFontSizeChange: handleFontSizeChangeWithSync,
+  });
+
+  // Broadcast style changes when they occur
+  useEffect(() => {
+    broadcastStyleChange(textColor, fontSize);
+  }, [textColor, fontSize, broadcastStyleChange]);
 
   const handleSendKeystroke = useCallback((content: string, isComplete: boolean) => {
     if (isComplete) {
@@ -379,7 +398,7 @@ export default function Chat() {
         onUsernameChange={handleUsernameChange}
         onSendKeystroke={handleSendKeystroke}
         fontSize={fontSize}
-        onFontSizeChange={handleFontSizeChange}
+        onFontSizeChange={handleFontSizeChangeWithSync}
         textColor={textColor}
         onTextColorChange={handleTextColorChange}
       />

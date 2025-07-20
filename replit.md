@@ -44,9 +44,10 @@ Preferred communication style: Simple, everyday language.
 
 ### UI Components
 - **Chat Viewport**: Main scrolling message area with horizontal animation
-- **Message Bubbles**: Color-coded user messages with position tracking
+- **Message Bubbles**: Color-coded user messages with position tracking and style consistency
 - **Connection Status**: Real-time connection and user count display
-- **Customization Bar**: User controls for name, colors, and message input with localStorage persistence
+- **Customization Bar**: User controls for name, colors, and message input with cross-tab synchronization
+- **Style Sync System**: BroadcastChannel-based real-time style synchronization across browser tabs
 
 ### WebSocket Integration
 - **Connection Management**: Automatic reconnection with exponential backoff
@@ -55,6 +56,8 @@ Preferred communication style: Simple, everyday language.
 - **Error Handling**: Graceful degradation when WebSocket unavailable
 - **Rate Limiting**: Server-side protection against spam (50 messages/minute max)
 - **Content Validation**: Message length limits and timing controls
+- **Style Transmission**: Real-time style data (color, font size) sent with each message
+- **Multi-Tab Support**: Messages appear in all tabs of same user for seamless experience
 
 ## Data Flow
 
@@ -72,6 +75,7 @@ Preferred communication style: Simple, everyday language.
 - **WebSocket State**: Custom hook managing connection and message handling
 - **URL State**: Query parameters for room, theme, and customization
 - **Persistent State**: localStorage for user preferences (username, colors, font size)
+- **Cross-Tab Sync**: BroadcastChannel API synchronizes styles across tabs for same username
 
 ## External Dependencies
 
