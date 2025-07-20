@@ -404,7 +404,7 @@ export default function Chat() {
       />
 
       {/* Query Demo Indicator */}
-      <div className="absolute bottom-4 left-4 bg-indigo-900/90 backdrop-blur-sm px-3 py-2 rounded-lg text-xs border border-indigo-600/50">
+      <div className="absolute bottom-20 left-4 bg-indigo-900/90 backdrop-blur-sm px-3 py-2 rounded-lg text-xs border border-indigo-600/50">
         <div className="text-indigo-300 font-medium mb-1">Query Customization:</div>
         <div className="text-gray-300">
           ?bg={params.bg}&room={params.room}&color={params.color}
