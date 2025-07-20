@@ -20,6 +20,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [typingMessages, setTypingMessages] = useState(new Map<string, { content: string; yPosition: number; username: string; userColor?: string; fontSize?: string }>());
   const [occupiedPositions, setOccupiedPositions] = useState<Array<{ yPosition: number; timestamp: number; height: number }>>([]);
+  const [isReplaying, setIsReplaying] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
     const saved = localStorage.getItem('whirledtalk-font-size');
     return saved || params.size;
@@ -377,11 +378,52 @@ export default function Chat() {
     }
   }, [sendMessage, username, params.room, typingMessages, textColor, fontSize, findOptimalPosition]);
 
-  // Load recent messages on mount
+  // Load recent messages on mount with animated replay
   useEffect(() => {
     fetch(`/api/messages/${params.room}`)
       .then(res => res.json())
-      .then(data => setMessages(data))
+      .then((data: Message[]) => {
+        if (data && data.length > 0) {
+          setIsReplaying(true);
+          
+          // Sort by timestamp to ensure chronological order
+          const sortedMessages = data.sort((a, b) => 
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+          
+          // Animate messages appearing one by one
+          sortedMessages.forEach((message, index) => {
+            setTimeout(() => {
+              setMessages(prev => {
+                // Check if message already exists to avoid duplicates
+                if (prev.some(m => m.id === message.id)) {
+                  return prev;
+                }
+                
+                // Assign staggered Y position if not already set
+                const yPosition = message.yPosition || ((index * 15) % 80) + 10;
+                
+                return [...prev, {
+                  ...message,
+                  yPosition,
+                }];
+              });
+              
+              // Record position as occupied
+              setOccupiedPositions(prev => [...prev, {
+                yPosition: message.yPosition || ((index * 15) % 80) + 10,
+                timestamp: Date.now(),
+                height: 6
+              }]);
+              
+              // Stop replay indicator after last message
+              if (index === sortedMessages.length - 1) {
+                setTimeout(() => setIsReplaying(false), 500);
+              }
+            }, index * 400); // 400ms interval for faster replay
+          });
+        }
+      })
       .catch(console.error);
   }, [params.room]);
 
@@ -406,6 +448,16 @@ export default function Chat() {
         textColor={textColor}
         onTextColorChange={handleTextColorChange}
       />
+
+      {/* Replay Indicator */}
+      {isReplaying && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-900/95 backdrop-blur-md px-6 py-4 rounded-xl text-sm border border-gray-600/50 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-gray-300">Replaying chat history...</span>
+          </div>
+        </div>
+      )}
 
       {/* Query Demo Indicator */}
       <div className="absolute bottom-20 left-4 bg-indigo-900/90 backdrop-blur-sm px-3 py-2 rounded-lg text-xs border border-indigo-600/50">
