@@ -36,10 +36,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const checkRateLimit = (ws: ExtendedWebSocket): boolean => {
     const now = Date.now();
     const windowMs = 60000; // 1 minute window
-    const maxMessages = 30; // Reduced from 50 to 30 messages per minute
-    const minInterval = 100; // Minimum 100ms between messages
+    const maxMessages = 50; // Increased back to reasonable limit for development
+    const minInterval = 50; // Reduced to 50ms for more responsive typing
     
-    // Check minimum interval
+    // Check minimum interval (only if we have a previous message time)
     if (ws.lastMessageTime && now - ws.lastMessageTime < minInterval) {
       return false;
     }
@@ -63,10 +63,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('New WebSocket connection');
     clients.add(ws);
     
-    // Initialize rate limiting
+    // Initialize rate limiting - don't set lastMessageTime on connection
     ws.messageCount = 0;
     ws.lastResetTime = Date.now();
-    ws.lastMessageTime = Date.now();
+    // ws.lastMessageTime will be set when first message is received
     
     // Extract room from query params
     const url = new URL(req.url || '', `http://${req.headers.host}`);
@@ -111,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         ws.username = validatedMessage.username;
         ws.room = validatedMessage.room;
-        ws.lastMessageTime = now;
+        ws.lastMessageTime = now; // Update after successful rate limit check
 
         switch (validatedMessage.type) {
           case 'keystroke':
