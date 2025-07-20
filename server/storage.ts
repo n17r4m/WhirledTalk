@@ -41,6 +41,8 @@ export class MemStorage implements IStorage {
       timestamp: new Date(),
       xPosition: insertMessage.xPosition,
       yPosition: insertMessage.yPosition,
+      userColor: (insertMessage as any).userColor,
+      fontSize: (insertMessage as any).fontSize,
     };
     this.messages.set(id, message);
     return message;

@@ -17,9 +17,22 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
       const element = elementRef.current;
       element.style.top = `${message.yPosition}%`;
       
-      // Only start animation for completed messages, not typing ones
-      if (!isTyping) {
-        element.style.right = '0px'; // Start from right edge
+      // Check if this is a pre-loaded message (has xPosition > 0) or new message
+      const isPreloadedMessage = message.xPosition > 0;
+      
+      if (isTyping) {
+        // For typing messages, position at right edge without animation
+        element.style.right = '0px';
+        element.style.left = 'auto';
+        element.style.transform = 'translateX(0)';
+      } else if (isPreloadedMessage) {
+        // For pre-loaded messages, position horizontally based on age (staggered)
+        element.style.left = `${message.xPosition}%`;
+        element.style.right = 'auto';
+        element.style.transform = 'translateX(0)';
+      } else {
+        // For new messages, start from right edge and animate left
+        element.style.right = '0px';
         element.style.left = 'auto';
         
         // Animate to the left
@@ -36,14 +49,9 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         return () => {
           animation.cancel();
         };
-      } else {
-        // For typing messages, position at right edge without animation
-        element.style.right = '0px';
-        element.style.left = 'auto';
-        element.style.transform = 'translateX(0)';
       }
     }
-  }, [message.yPosition, isTyping]);
+  }, [message.yPosition, message.xPosition, isTyping]);
 
   const getUserColor = (username: string, customColor?: string) => {
     if (customColor) {

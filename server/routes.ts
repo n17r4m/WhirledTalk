@@ -25,7 +25,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/messages/:room', async (req, res) => {
     try {
       const { room } = req.params;
-      const messages = await storage.getRecentMessages(room, 100);
+      const messages = await storage.getRecentMessages(room, 15); // Limit to 15 recent messages
       res.json(messages);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch messages' });
@@ -138,7 +138,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 isTyping: false,
                 xPosition: 0, // Messages start from right edge
                 yPosition: validatedMessage.yPosition,
-              });
+                userColor: validatedMessage.userColor,
+                fontSize: validatedMessage.fontSize,
+              } as any);
             }
             broadcastToRoom(validatedMessage.room, {
               type: 'newMessage',

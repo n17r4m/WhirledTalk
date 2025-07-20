@@ -377,11 +377,20 @@ export default function Chat() {
     }
   }, [sendMessage, username, params.room, typingMessages, textColor, fontSize, findOptimalPosition]);
 
-  // Load recent messages on mount
+  // Load recent messages on mount with horizontal staggering
   useEffect(() => {
     fetch(`/api/messages/${params.room}`)
       .then(res => res.json())
-      .then(data => setMessages(data))
+      .then((data: Message[]) => {
+        // Process messages to add horizontal staggering based on message order
+        const staggeredMessages = data.map((message, index) => ({
+          ...message,
+          // Stagger messages horizontally: newer messages further right
+          // Each message offset by 15% of screen width
+          xPosition: index * 15, // 0%, 15%, 30%, 45%, etc.
+        }));
+        setMessages(staggeredMessages);
+      })
       .catch(console.error);
   }, [params.room]);
 
