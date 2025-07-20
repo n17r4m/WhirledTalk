@@ -15,19 +15,25 @@ export function MessageBubble({ message, isTyping = false, className = '' }: Mes
       // Set initial position and start animation
       const element = elementRef.current;
       element.style.top = `${message.yPosition}%`;
-      element.style.left = '100vw'; // Start from right edge
+      element.style.right = '0px'; // Start from right edge
+      element.style.left = 'auto';
       
       // Animate to the left
-      element.animate([
+      const animation = element.animate([
         { transform: 'translateX(0)' },
-        { transform: 'translateX(-100vw)' }
+        { transform: 'translateX(calc(-100vw - 100%))' }
       ], {
-        duration: 15000, // 15 seconds to cross screen
+        duration: 20000, // 20 seconds to cross screen - slower for better readability
         easing: 'linear',
         fill: 'forwards'
       });
+
+      // Clean up animation on unmount
+      return () => {
+        animation.cancel();
+      };
     }
-  }, [message.yPosition]);
+  }, [message.yPosition, message.content]);
 
   const getUserColor = (username: string) => {
     const colors = [

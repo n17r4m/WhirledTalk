@@ -29,19 +29,20 @@ export function CustomizationBar({
         setCurrentMessage('');
       }
     } else {
-      // Send keystroke immediately
-      const newContent = currentMessage + e.key;
-      setCurrentMessage(newContent);
-      onSendKeystroke(newContent, false);
+      // Only send printable characters (letters, numbers, symbols, spaces)
+      // Exclude control keys like Control, Alt, Shift, Backspace, etc.
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const newContent = currentMessage + e.key;
+        setCurrentMessage(newContent);
+        onSendKeystroke(newContent, false);
+      }
     }
   };
 
-  const handleKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace') {
-      const target = e.target as HTMLInputElement;
-      setCurrentMessage(target.value);
-      onSendKeystroke(target.value, false);
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCurrentMessage(value);
+    onSendKeystroke(value, false);
   };
 
   const colorOptions = [
@@ -76,9 +77,8 @@ export function CustomizationBar({
               type="text"
               placeholder="Type to chat... (each keystroke is broadcast live)"
               value={currentMessage}
-              onChange={(e) => setCurrentMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              onKeyUp={handleKeyUp}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">

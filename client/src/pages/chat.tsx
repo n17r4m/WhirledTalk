@@ -83,16 +83,16 @@ export default function Chat() {
   const handleSendKeystroke = useCallback((content: string, isComplete: boolean) => {
     if (isComplete) {
       // Send new message event with random Y position
-      const yPosition = Math.random() * 80 + 10; // 10-90% of viewport height
+      const yPosition = Math.random() * 70 + 15; // 15-85% of viewport height for better visibility
       sendMessage({
         type: 'newMessage',
         content,
         yPosition,
       });
       
-      // Add to local messages immediately
+      // Add to local messages immediately with unique key
       setMessages(prev => [...prev, {
-        id: Date.now(),
+        id: Date.now() + Math.random(), // Ensure unique ID
         username,
         content,
         room: params.room,
@@ -101,15 +101,37 @@ export default function Chat() {
         xPosition: 0,
         yPosition,
       }]);
+
+      // Clear any typing indicator for this user
+      setTypingMessages(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(username);
+        return newMap;
+      });
     } else {
-      // Send keystroke event
+      // Send keystroke event with current Y position for continuity
+      const currentTyping = typingMessages.get(username);
+      const yPosition = currentTyping?.yPosition || Math.random() * 70 + 15;
+      
       sendMessage({
         type: 'keystroke',
         content,
         isTyping: true,
+        yPosition,
+      });
+
+      // Update local typing state
+      setTypingMessages(prev => {
+        const newMap = new Map(prev);
+        newMap.set(username, {
+          content,
+          yPosition,
+          username,
+        });
+        return newMap;
       });
     }
-  }, [sendMessage, username, params.room]);
+  }, [sendMessage, username, params.room, typingMessages]);
 
   // Load recent messages on mount
   useEffect(() => {

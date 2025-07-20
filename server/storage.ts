@@ -33,9 +33,14 @@ export class MemStorage implements IStorage {
   async addMessage(insertMessage: InsertMessage): Promise<Message> {
     const id = this.currentId++;
     const message: Message = {
-      ...insertMessage,
       id,
+      username: insertMessage.username,
+      content: insertMessage.content,
+      room: insertMessage.room || 'global',
+      isTyping: insertMessage.isTyping || false,
       timestamp: new Date(),
+      xPosition: insertMessage.xPosition,
+      yPosition: insertMessage.yPosition,
     };
     this.messages.set(id, message);
     return message;
@@ -53,11 +58,14 @@ export class MemStorage implements IStorage {
   async deleteOldMessages(olderThanMinutes: number = 30): Promise<void> {
     const cutoffTime = new Date(Date.now() - olderThanMinutes * 60 * 1000);
     
-    for (const [id, message] of this.messages.entries()) {
+    const entriesToDelete: number[] = [];
+    this.messages.forEach((message, id) => {
       if (new Date(message.timestamp) < cutoffTime) {
-        this.messages.delete(id);
+        entriesToDelete.push(id);
       }
-    }
+    });
+    
+    entriesToDelete.forEach(id => this.messages.delete(id));
   }
 }
 
