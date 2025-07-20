@@ -17,27 +17,12 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
       const element = elementRef.current;
       element.style.top = `${message.yPosition}%`;
       
-      // Check if this is a pre-loaded message (has xPosition > 0) or new message
-      const isPreloadedMessage = message.xPosition > 0;
-      
-      if (isTyping) {
-        // For typing messages, position at right edge without animation
-        element.style.right = '0px';
+      // Only start animation for completed messages, not typing ones
+      if (!isTyping) {
+        element.style.right = '0px'; // Start from right edge
         element.style.left = 'auto';
-        element.style.transform = 'translateX(0)';
-      } else {
-        // For all completed messages (both preloaded and new), animate to the left
-        if (isPreloadedMessage) {
-          // Pre-loaded messages start from their staggered position
-          element.style.left = `${message.xPosition}%`;
-          element.style.right = 'auto';
-        } else {
-          // New messages start from right edge
-          element.style.right = '0px';
-          element.style.left = 'auto';
-        }
         
-        // Animate to the left from current position
+        // Animate to the left
         const animation = element.animate([
           { transform: 'translateX(0)' },
           { transform: 'translateX(calc(-100vw - 100%))' }
@@ -51,9 +36,14 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         return () => {
           animation.cancel();
         };
+      } else {
+        // For typing messages, position at right edge without animation
+        element.style.right = '0px';
+        element.style.left = 'auto';
+        element.style.transform = 'translateX(0)';
       }
     }
-  }, [message.yPosition, message.xPosition, isTyping]);
+  }, [message.yPosition, isTyping]);
 
   const getUserColor = (username: string, customColor?: string) => {
     if (customColor) {
