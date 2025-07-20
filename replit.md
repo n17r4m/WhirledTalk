@@ -46,7 +46,7 @@ Preferred communication style: Simple, everyday language.
 - **Chat Viewport**: Main scrolling message area with horizontal animation
 - **Message Bubbles**: Color-coded user messages with position tracking
 - **Connection Status**: Real-time connection and user count display
-- **Customization Bar**: User controls for name, colors, and message input
+- **Customization Bar**: User controls for name, colors, and message input with localStorage persistence
 
 ### WebSocket Integration
 - **Connection Management**: Automatic reconnection with exponential backoff
@@ -71,6 +71,7 @@ Preferred communication style: Simple, everyday language.
 - **Server State**: TanStack Query for API calls and caching
 - **WebSocket State**: Custom hook managing connection and message handling
 - **URL State**: Query parameters for room, theme, and customization
+- **Persistent State**: localStorage for user preferences (username, colors, font size)
 
 ## External Dependencies
 

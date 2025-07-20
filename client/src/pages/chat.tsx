@@ -12,14 +12,29 @@ export default function Chat() {
   const themeClasses = getThemeClasses();
   
   const [username, setUsername] = useState(() => {
-    return `guest_${Math.random().toString(36).substr(2, 6)}`;
+    const saved = localStorage.getItem('whirledtalk-username');
+    return saved || `guest_${Math.random().toString(36).substr(2, 6)}`;
   });
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [typingMessages, setTypingMessages] = useState(new Map<string, { content: string; yPosition: number; username: string; userColor?: string; fontSize?: string }>());
   const [occupiedPositions, setOccupiedPositions] = useState<Array<{ yPosition: number; timestamp: number; height: number }>>([]);
-  const [fontSize, setFontSize] = useState(params.size);
-  const [textColor, setTextColor] = useState(params.color);
+  const [fontSize, setFontSize] = useState(() => {
+    const saved = localStorage.getItem('whirledtalk-font-size');
+    return saved || params.size;
+  });
+  const [textColor, setTextColor] = useState(() => {
+    const saved = localStorage.getItem('whirledtalk-text-color');
+    return saved || params.color;
+  });
+
+  // Update URL params when preferences change
+  useEffect(() => {
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('color', textColor);
+    newUrl.searchParams.set('size', fontSize);
+    window.history.replaceState({}, '', newUrl.toString());
+  }, [textColor, fontSize]);
 
   // Smart positioning algorithm
   const findOptimalPosition = useCallback((): number => {
@@ -202,6 +217,24 @@ export default function Chat() {
     onMessage: handleWebSocketMessage,
   });
 
+  // Handle font size changes with localStorage persistence
+  const handleFontSizeChange = useCallback((newSize: string) => {
+    setFontSize(newSize);
+    localStorage.setItem('whirledtalk-font-size', newSize);
+  }, []);
+
+  // Handle color changes with localStorage persistence  
+  const handleTextColorChange = useCallback((newColor: string) => {
+    setTextColor(newColor);
+    localStorage.setItem('whirledtalk-text-color', newColor);
+  }, []);
+
+  // Handle username changes with localStorage persistence
+  const handleUsernameChange = useCallback((newUsername: string) => {
+    setUsername(newUsername);
+    localStorage.setItem('whirledtalk-username', newUsername);
+  }, []);
+
   const handleSendKeystroke = useCallback((content: string, isComplete: boolean) => {
     if (isComplete) {
       // Get the current typing position to maintain it for the completed message
@@ -292,12 +325,12 @@ export default function Chat() {
       
       <CustomizationBar
         username={username}
-        onUsernameChange={setUsername}
+        onUsernameChange={handleUsernameChange}
         onSendKeystroke={handleSendKeystroke}
         fontSize={fontSize}
-        onFontSizeChange={setFontSize}
+        onFontSizeChange={handleFontSizeChange}
         textColor={textColor}
-        onTextColorChange={setTextColor}
+        onTextColorChange={handleTextColorChange}
       />
 
       {/* Query Demo Indicator */}

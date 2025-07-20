@@ -178,7 +178,7 @@ export function CustomizationBar({
     }
   };
 
-  // Cleanup timeout on unmount
+  // Cleanup timeout on unmount and initialize UI state from localStorage
   useEffect(() => {
     return () => {
       if (idleTimeoutRef.current) {
@@ -186,6 +186,25 @@ export function CustomizationBar({
       }
     };
   }, []);
+
+  // Ensure UI reflects current selections on mount
+  useEffect(() => {
+    // Force UI update to reflect current color selection
+    const colorButton = document.querySelector(`[data-color="${textColor}"]`);
+    if (colorButton) {
+      // Add visual feedback that this color is selected
+      document.querySelectorAll('[data-color]').forEach(btn => btn.classList.remove('ring-2', 'ring-white'));
+      colorButton.classList.add('ring-2', 'ring-white');
+    }
+
+    // Force UI update to reflect current font size selection
+    const sizeButton = document.querySelector(`[data-size="${fontSize}"]`);
+    if (sizeButton) {
+      // Add visual feedback that this size is selected
+      document.querySelectorAll('[data-size]').forEach(btn => btn.classList.remove('bg-indigo-600'));
+      sizeButton.classList.add('bg-indigo-600');
+    }
+  }, [textColor, fontSize]);
 
   return (
     <div 
