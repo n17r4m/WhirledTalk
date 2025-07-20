@@ -9,6 +9,8 @@ interface CustomizationBarProps {
   onFontSizeChange: (size: string) => void;
   textColor: string;
   onTextColorChange: (color: string) => void;
+  usernameStatus?: 'valid' | 'pending' | 'rejected';
+  validUsername?: string;
 }
 
 export function CustomizationBar({
@@ -19,6 +21,8 @@ export function CustomizationBar({
   onFontSizeChange,
   textColor,
   onTextColorChange,
+  usernameStatus = 'valid',
+  validUsername,
 }: CustomizationBarProps) {
   const [currentMessage, setCurrentMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -217,13 +221,41 @@ export function CustomizationBar({
           {/* Username Input */}
           <div className="flex items-center gap-2">
             <label className="text-xs text-gray-400 font-medium">Name:</label>
-            <input
-              type="text"
-              placeholder="Your name"
-              value={username}
-              onChange={(e) => onUsernameChange(e.target.value)}
-              className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-24"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => onUsernameChange(e.target.value)}
+                className={`bg-gray-700 text-white px-3 py-1 rounded text-sm border focus:outline-none w-32 ${
+                  usernameStatus === 'valid' ? 'border-gray-600 focus:border-blue-500' :
+                  usernameStatus === 'pending' ? 'border-yellow-500 focus:border-yellow-400' :
+                  'border-red-500 focus:border-red-400'
+                }`}
+                placeholder="Enter name..."
+              />
+              {/* Status indicator */}
+              {usernameStatus === 'pending' && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                  <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                </div>
+              )}
+              {usernameStatus === 'rejected' && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                </div>
+              )}
+              {usernameStatus === 'valid' && username !== validUsername && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                </div>
+              )}
+            </div>
+            {/* Status text */}
+            {usernameStatus === 'rejected' && validUsername && (
+              <span className="text-xs text-red-400">
+                Using: {validUsername}
+              </span>
+            )}
           </div>
 
           {/* Message Input */}

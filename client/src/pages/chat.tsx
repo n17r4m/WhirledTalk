@@ -22,6 +22,9 @@ export default function Chat() {
   const [occupiedPositions, setOccupiedPositions] = useState<Array<{ yPosition: number; timestamp: number; height: number }>>([]);
   const [isReplaying, setIsReplaying] = useState(false);
   const [nameError, setNameError] = useState<string>('');
+  const [validUsername, setValidUsername] = useState(username); // Last known valid username
+  const [pendingUsername, setPendingUsername] = useState<string>(''); // Username being attempted
+  const [usernameStatus, setUsernameStatus] = useState<'valid' | 'pending' | 'rejected'>('valid');
   const [fontSize, setFontSize] = useState(() => {
     const saved = localStorage.getItem('whirledtalk-font-size');
     return saved || params.size;
@@ -252,6 +255,13 @@ export default function Chat() {
         break;
         
       case 'join':
+        // Username successfully validated
+        if (wsMessage.username === username) {
+          setValidUsername(username);
+          setUsernameStatus('valid');
+          setPendingUsername('');
+          console.log(`Username "${username}" successfully validated`);
+        }
         console.log(`${wsMessage.username} joined the room`);
         break;
         
@@ -273,7 +283,9 @@ export default function Chat() {
     onMessage: handleWebSocketMessage,
     onNameError: (error) => {
       setNameError(error);
-      // Auto-clear after 5 seconds
+      setUsernameStatus('rejected');
+      setPendingUsername(username);
+      // Auto-clear error after 5 seconds, but keep status
       setTimeout(() => setNameError(''), 5000);
     },
   });
@@ -294,11 +306,15 @@ export default function Chat() {
     // Broadcast to other tabs will be handled by useStyleSync
   }, []);
 
-  // Handle username changes with localStorage persistence
+  // Handle username changes with localStorage persistence and validation
   const handleUsernameChange = useCallback((newUsername: string) => {
+    if (newUsername !== validUsername) {
+      setUsernameStatus('pending');
+      setPendingUsername(newUsername);
+    }
     setUsername(newUsername);
     localStorage.setItem('whirledtalk-username', newUsername);
-  }, []);
+  }, [validUsername]);
 
   // Style synchronization across tabs for same username
   const { broadcastStyleChange } = useStyleSync({
@@ -315,9 +331,18 @@ export default function Chat() {
   }, [textColor, fontSize, broadcastStyleChange]);
 
   const handleSendKeystroke = useCallback((content: string, isComplete: boolean) => {
+    // Use valid username for messages when in rejected state
+    const messageUsername = usernameStatus === 'rejected' ? validUsername : username;
+    
+    // Show error flash if trying to send with rejected username
+    if (isComplete && usernameStatus === 'rejected') {
+      setNameError(`Cannot send message as "${username}" - name is taken. Using "${validUsername}" instead.`);
+      setTimeout(() => setNameError(''), 3000);
+    }
+    
     if (isComplete) {
       // Get the current typing position to maintain it for the completed message
-      const currentTyping = typingMessages.get(username);
+      const currentTyping = typingMessages.get(messageUsername);
       const yPosition = currentTyping?.yPosition || findOptimalPosition();
       
       // Record this position as occupied
@@ -335,10 +360,10 @@ export default function Chat() {
         fontSize: fontSize,
       });
       
-      // Add to local messages immediately with the same Y position as typing and style info
+      // Add to local messages immediately with the actual sending username
       setMessages(prev => [...prev, {
         id: Date.now() + Math.random(), // Ensure unique ID
-        username,
+        username: messageUsername,
         content,
         room: params.room,
         isTyping: false,
@@ -352,12 +377,12 @@ export default function Chat() {
       // Clear typing indicator
       setTypingMessages(prev => {
         const newMap = new Map(prev);
-        newMap.delete(username);
+        newMap.delete(messageUsername);
         return newMap;
       });
     } else {
       // Send keystroke event with current Y position for continuity or new optimal position
-      const currentTyping = typingMessages.get(username);
+      const currentTyping = typingMessages.get(messageUsername);
       const yPosition = currentTyping?.yPosition || findOptimalPosition();
       
       sendMessage({
@@ -369,20 +394,20 @@ export default function Chat() {
         fontSize: fontSize,
       });
 
-      // Update local typing state
+      // Update local typing state with message username
       setTypingMessages(prev => {
         const newMap = new Map(prev);
-        newMap.set(username, {
+        newMap.set(messageUsername, {
           content,
           yPosition,
-          username,
+          username: messageUsername,
           userColor: textColor,
           fontSize: fontSize,
         });
         return newMap;
       });
     }
-  }, [sendMessage, username, params.room, typingMessages, textColor, fontSize, findOptimalPosition]);
+  }, [sendMessage, username, validUsername, usernameStatus, params.room, typingMessages, textColor, fontSize, findOptimalPosition]);
 
   // Load recent messages on mount with animated replay
   useEffect(() => {
@@ -453,6 +478,8 @@ export default function Chat() {
         onFontSizeChange={handleFontSizeChangeWithSync}
         textColor={textColor}
         onTextColorChange={handleTextColorChange}
+        usernameStatus={usernameStatus}
+        validUsername={validUsername}
       />
 
       {/* Replay Indicator */}
