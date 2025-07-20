@@ -245,7 +245,7 @@ export function CustomizationBar({
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                 <button
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-300 transition-colors"
+                  className="emoji-button p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-300 transition-colors"
                   type="button"
                 >
                   😊
@@ -260,7 +260,7 @@ export function CustomizationBar({
             {showEmojiPicker && (
               <div 
                 ref={emojiPickerRef}
-                className="absolute bottom-full right-0 mb-2 z-50"
+                className="emoji-picker absolute bottom-full right-0 mb-2 z-50"
                 onClick={(e) => e.stopPropagation()}
               >
                 <EmojiPicker
@@ -299,7 +299,7 @@ export function CustomizationBar({
                 <button
                   key={color.name}
                   onClick={() => onTextColorChange(color.name)}
-                  className={`w-4 h-4 rounded-full border border-gray-600 hover:scale-110 transition-transform ${color.class} ${
+                  className={`color-button w-4 h-4 rounded-full border border-gray-600 hover:scale-110 transition-transform ${color.class} ${
                     textColor === color.name ? 'ring-2 ring-white' : ''
                   }`}
                 />
@@ -310,7 +310,7 @@ export function CustomizationBar({
           {/* Settings */}
           <button 
             onClick={() => setShowEmojiPicker(false)}
-            className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors border border-gray-600"
+            className="settings-button p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors border border-gray-600"
           >
             <i className="fas fa-cog text-gray-400 text-sm" />
           </button>

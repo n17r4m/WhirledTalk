@@ -36,6 +36,57 @@ export default function Chat() {
     window.history.replaceState({}, '', newUrl.toString());
   }, [textColor, fontSize]);
 
+  // Auto-focus management
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Check if click is on interactive elements that should NOT trigger focus
+      const interactiveSelectors = [
+        'input', 'button', 'select', 'textarea',
+        '.emoji-picker', '[data-color]', '[data-size]',
+        '.emoji-button', '.color-button', '.settings-button'
+      ];
+      
+      const isInteractiveElement = interactiveSelectors.some(selector => {
+        return target.matches?.(selector) || target.closest?.(selector);
+      });
+      
+      // If not clicking on interactive elements, focus the text input
+      if (!isInteractiveElement) {
+        const textInput = document.querySelector('input[type="text"][placeholder*="chat"]') as HTMLInputElement;
+        if (textInput && textInput !== target) {
+          setTimeout(() => textInput.focus(), 0);
+        }
+      }
+    };
+
+    const handleWindowFocus = () => {
+      // When window gains focus, focus the text input
+      const textInput = document.querySelector('input[type="text"][placeholder*="chat"]') as HTMLInputElement;
+      if (textInput) {
+        setTimeout(() => textInput.focus(), 0);
+      }
+    };
+
+    // Add event listeners
+    document.addEventListener('click', handleGlobalClick);
+    window.addEventListener('focus', handleWindowFocus);
+    
+    // Initial focus on mount
+    setTimeout(() => {
+      const textInput = document.querySelector('input[type="text"][placeholder*="chat"]') as HTMLInputElement;
+      if (textInput) {
+        textInput.focus();
+      }
+    }, 100);
+
+    return () => {
+      document.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, []);
+
   // Smart positioning algorithm
   const findOptimalPosition = useCallback((): number => {
     const now = Date.now();
