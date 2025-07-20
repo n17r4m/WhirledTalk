@@ -24,10 +24,28 @@ export function CustomizationBar({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [lastKeystroke, setLastKeystroke] = useState(Date.now());
   const [lastMessageLength, setLastMessageLength] = useState(0);
+  const [pasteAttempts, setPasteAttempts] = useState<number[]>([]);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const idleTimeoutRef = useRef<NodeJS.Timeout>();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Block paste shortcuts completely
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+      e.preventDefault();
+      return;
+    }
+    
+    // Block other potentially spammy shortcuts
+    if ((e.ctrlKey || e.metaKey) && ['a', 'x', 'c'].includes(e.key.toLowerCase())) {
+      // Allow these but track them
+      const now = Date.now();
+      if (now - lastKeystroke < 100) {
+        e.preventDefault();
+        return;
+      }
+    }
+    
     if (e.key === 'Enter') {
       // Clear idle timeout when manually completing
       if (idleTimeoutRef.current) {
@@ -39,28 +57,61 @@ export function CustomizationBar({
         onSendKeystroke(currentMessage, true);
         setCurrentMessage('');
         setLastMessageLength(0);
+        setPasteAttempts([]); // Reset paste tracking
       }
     }
-    // Remove all other keystroke handling from here to avoid duplicates
+  };
+
+  // Enhanced spam detection
+  const detectSpam = (value: string, now: number): boolean => {
+    const lengthDiff = Math.abs(value.length - lastMessageLength);
+    const timeDiff = now - lastKeystroke;
+    
+    // Clean up old paste attempts (older than 10 seconds)
+    const recentPastes = pasteAttempts.filter(timestamp => now - timestamp < 10000);
+    setPasteAttempts(recentPastes);
+    
+    // Detect rapid paste: more than 5 chars in less than 50ms
+    const isRapidPaste = lengthDiff > 5 && timeDiff < 50;
+    
+    // Detect burst pasting: more than 3 paste attempts in 10 seconds
+    const isBurstPasting = recentPastes.length >= 3;
+    
+    // Detect excessive length change
+    const isExcessiveLength = lengthDiff > 50;
+    
+    if (isRapidPaste || isBurstPasting || isExcessiveLength) {
+      if (isRapidPaste) {
+        setPasteAttempts(prev => [...prev, now]);
+      }
+      return true;
+    }
+    
+    return false;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const now = Date.now();
     
-    // Anti-spam protection: detect large paste operations
-    const lengthDiff = Math.abs(value.length - lastMessageLength);
-    const timeDiff = now - lastKeystroke;
+    // Enhanced anti-spam protection
+    if (detectSpam(value, now)) {
+      // Reject the change completely for spam
+      e.preventDefault();
+      return;
+    }
     
-    // If more than 10 characters added in less than 100ms, likely a paste - limit it
-    if (lengthDiff > 10 && timeDiff < 100) {
-      // Allow paste but limit to reasonable increments
-      const maxIncrement = Math.min(lengthDiff, 3);
-      const limitedValue = value.length > currentMessage.length 
-        ? currentMessage + value.slice(currentMessage.length, currentMessage.length + maxIncrement)
-        : value;
-      setCurrentMessage(limitedValue);
-      onSendKeystroke(limitedValue, false);
+    // Rate limiting: don't allow changes faster than 30ms
+    const timeDiff = now - lastKeystroke;
+    if (timeDiff < 30) {
+      return;
+    }
+    
+    // Content length limiting
+    if (value.length > 200) {
+      const truncatedValue = value.substring(0, 200);
+      setCurrentMessage(truncatedValue);
+      onSendKeystroke(truncatedValue, false);
     } else {
       setCurrentMessage(value);
       // Only send keystroke if the content actually changed
@@ -160,11 +211,16 @@ export function CustomizationBar({
           <div className="flex-1 relative">
             <div className="relative flex">
               <input
+                ref={inputRef}
                 type="text"
                 placeholder="Type to chat..."
                 value={currentMessage}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onPaste={(e) => {
+                  // Block all paste operations
+                  e.preventDefault();
+                }}
                 className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 pr-20 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">

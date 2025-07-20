@@ -32,11 +32,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rate limiting helper
+  // Enhanced rate limiting helper
   const checkRateLimit = (ws: ExtendedWebSocket): boolean => {
     const now = Date.now();
     const windowMs = 60000; // 1 minute window
-    const maxMessages = 50; // Max 50 messages per minute
+    const maxMessages = 30; // Reduced from 50 to 30 messages per minute
+    const minInterval = 100; // Minimum 100ms between messages
+    
+    // Check minimum interval
+    if (ws.lastMessageTime && now - ws.lastMessageTime < minInterval) {
+      return false;
+    }
     
     // Reset counter if window has passed
     if (!ws.lastResetTime || now - ws.lastResetTime > windowMs) {
@@ -78,16 +84,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const message = JSON.parse(data.toString()) as WSMessage;
         const validatedMessage = wsMessageSchema.parse(message);
         
-        // Additional spam protection - prevent too frequent messages
         const now = Date.now();
-        if (ws.lastMessageTime && now - ws.lastMessageTime < 50) { // Min 50ms between messages
-          return;
-        }
         
-        // Content validation - basic spam detection
-        if (validatedMessage.content && validatedMessage.content.length > 500) {
-          console.log(`Message too long from user ${validatedMessage.username}`);
-          return;
+        // Enhanced content validation
+        if (validatedMessage.content) {
+          // Reduced length limit
+          if (validatedMessage.content.length > 200) {
+            console.log(`Message too long from user ${validatedMessage.username}`);
+            return;
+          }
+          
+          // Detect repeated characters (spam pattern)
+          const repeatedChars = /(.)\1{10,}/g;
+          if (repeatedChars.test(validatedMessage.content)) {
+            console.log(`Repeated character spam from user ${validatedMessage.username}`);
+            return;
+          }
+          
+          // Detect excessive special characters
+          const specialCharCount = (validatedMessage.content.match(/[^a-zA-Z0-9\s]/g) || []).length;
+          if (specialCharCount > validatedMessage.content.length * 0.5) {
+            console.log(`Excessive special characters from user ${validatedMessage.username}`);
+            return;
+          }
         }
         
         ws.username = validatedMessage.username;
