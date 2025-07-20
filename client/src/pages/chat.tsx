@@ -243,6 +243,8 @@ export default function Chat() {
             timestamp: new Date(),
             xPosition: 0,
             yPosition,
+            userColor: wsMessage.userColor, // Include style from sender
+            fontSize: wsMessage.fontSize,   // Include style from sender
           }]);
         }
         break;
@@ -326,7 +328,7 @@ export default function Chat() {
         fontSize: fontSize,
       });
       
-      // Add to local messages immediately with the same Y position as typing
+      // Add to local messages immediately with the same Y position as typing and style info
       setMessages(prev => [...prev, {
         id: Date.now() + Math.random(), // Ensure unique ID
         username,
@@ -336,6 +338,8 @@ export default function Chat() {
         timestamp: new Date(),
         xPosition: 0,
         yPosition,
+        userColor: textColor, // Include current style
+        fontSize: fontSize,   // Include current style
       }]);
 
       // Clear typing indicator

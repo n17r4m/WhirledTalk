@@ -28,8 +28,8 @@ export function ChatViewport({ messages, typingMessages, currentUser, userSettin
           <MessageBubble
             key={`message-${message.id}-${message.timestamp}`}
             message={message}
-            userColor={message.username === currentUser ? userSettings?.color : undefined}
-            fontSize={message.username === currentUser ? userSettings?.fontSize : undefined}
+            userColor={message.userColor || (message.username === currentUser ? userSettings?.color : undefined)}
+            fontSize={message.fontSize || (message.username === currentUser ? userSettings?.fontSize : undefined)}
           />
         ))}
         
@@ -46,6 +46,8 @@ export function ChatViewport({ messages, typingMessages, currentUser, userSettin
               timestamp: new Date(),
               xPosition: 0,
               yPosition: data.yPosition,
+              userColor: data.userColor,
+              fontSize: data.fontSize,
             }}
             isTyping={true}
             userColor={username === currentUser ? userSettings?.color : data.userColor}

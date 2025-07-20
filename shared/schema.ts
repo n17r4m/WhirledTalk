@@ -11,6 +11,8 @@ export const messages = pgTable("messages", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   xPosition: integer("x_position").notNull(),
   yPosition: integer("y_position").notNull(),
+  userColor: text("user_color"),
+  fontSize: text("font_size"),
 });
 
 export const insertMessageSchema = createInsertSchema(messages).pick({
