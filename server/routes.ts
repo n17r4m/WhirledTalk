@@ -18,9 +18,11 @@ interface ExtendedWebSocket extends WebSocket {
 const activeSessions = new Map<string, UserSession>(); // sessionId -> session
 const usernameOwnership = new Map<string, string>(); // "room:username" -> sessionId
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-const HOCKER_LATEST_URL = process.env.HOCKER_LATEST_URL || "http://localhost:3000/api/hn/latest";
+const HOCKER_BASE_URL = (process.env.HOCKER_URL || "http://maou:3000").replace(/\/+$/, "");
+const HOCKER_LATEST_URL = (process.env.HOCKER_LATEST_URL || `${HOCKER_BASE_URL}/api/hn/latest`).replace(/([^:]\/)\/+/g, "$1");
 const HOCKER_RELAY_ROOM = process.env.HOCKER_RELAY_ROOM || "global";
 const HOCKER_RELAY_INTERVAL_MS = Number.parseInt(process.env.HOCKER_RELAY_INTERVAL_MS || "3000", 10);
+const HOCKER_UNAVAILABLE_RETRY_MS = 2 * 60 * 1000;
 
 type HockerLatestItem = {
   hnId: number;
@@ -34,8 +36,38 @@ type HockerLatestResponse = {
   item: HockerLatestItem | null;
 };
 
-const stripHtml = (value: string) => value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+const decodeEntities = (value: string) =>
+  value
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+
+const stripHtml = (value: string) =>
+  decodeEntities(value)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const htmlToParagraphs = (value: string) => {
+  const normalized = decodeEntities(value)
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\/\s*(p|div|li|blockquote|h1|h2|h3|h4|h5|h6)\s*>/gi, "\n\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .trim();
+
+  return normalized
+    .split(/\n{2,}/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+};
 const truncate = (value: string, max = 160) => (value.length > max ? `${value.slice(0, max - 1).trimEnd()}...` : value);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -47,6 +79,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const clients = new Set<ExtendedWebSocket>();
   let lastRelayedHnId: number | null = null;
   let relayTimer: NodeJS.Timeout | null = null;
+  let relayTypingQueue: Promise<void> = Promise.resolve();
+  let hockerUnavailable = false;
   
   // Clean up expired sessions periodically
   setInterval(() => {
@@ -387,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cache: "no-store",
       });
       if (!response.ok) {
-        return;
+        return false;
       }
 
       const payload = await response.json() as HockerLatestResponse;
@@ -402,40 +436,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
       lastRelayedHnId = item.hnId;
 
       const username = `HN:${item.by || "unknown"}`;
-      const fallbackText = item.title?.trim() || stripHtml(item.text || "") || `HN item #${item.hnId}`;
+      const textParagraphs = item.text ? htmlToParagraphs(item.text) : [];
+      const titleLine = stripHtml(item.title || "");
+      const bodyLines = textParagraphs.length ? textParagraphs : (titleLine ? [titleLine] : [`HN item #${item.hnId}`]);
       const sourceUrl = item.sourceUrl || `https://news.ycombinator.com/item?id=${item.hnId}`;
-      const content = `${truncate(fallbackText)} [HN #${item.hnId}] ${sourceUrl}`;
-      const yPosition = Math.floor(18 + Math.random() * 60);
+      const lines = [...bodyLines.map((line) => truncate(line, 160)), `[HN #${item.hnId}] ${sourceUrl}`];
+      const baseYPosition = Math.floor(18 + Math.random() * 55);
 
-      await storage.addMessage({
-        username,
-        content,
-        room: HOCKER_RELAY_ROOM,
-        isTyping: false,
-        xPosition: 0,
-        yPosition,
-      });
+      const relayAsTyping = async () => {
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+          const content = lines[lineIndex];
+          const yPosition = Math.min(85, baseYPosition + lineIndex * 8);
+          const words = content.split(/\s+/).filter(Boolean);
+          const step = Math.max(1, Math.ceil(words.length / 22));
 
-      broadcastToRoom(HOCKER_RELAY_ROOM, {
-        type: "newMessage",
-        username,
-        content,
-        room: HOCKER_RELAY_ROOM,
-        yPosition,
+          for (let i = step; i <= words.length; i += step) {
+            const partial = words.slice(0, i).join(" ");
+            broadcastToRoom(HOCKER_RELAY_ROOM, {
+              type: "keystroke",
+              username,
+              content: partial,
+              room: HOCKER_RELAY_ROOM,
+              isTyping: true,
+              yPosition,
+            });
+            await sleep(70);
+          }
+
+          await storage.addMessage({
+            username,
+            content,
+            room: HOCKER_RELAY_ROOM,
+            isTyping: false,
+            xPosition: 0,
+            yPosition,
+          });
+
+          broadcastToRoom(HOCKER_RELAY_ROOM, {
+            type: "newMessage",
+            username,
+            content,
+            room: HOCKER_RELAY_ROOM,
+            yPosition,
+          });
+          await sleep(100);
+        }
+      };
+
+      relayTypingQueue = relayTypingQueue.then(relayAsTyping).catch((error) => {
+        console.error("[relay] typing simulation failed", error);
       });
+      return true;
     } catch (error) {
-      console.error("[relay] failed to ingest Hocker item", error);
+      return false;
     }
   };
 
-  void relayLatestHockerItem();
-  relayTimer = setInterval(() => {
-    void relayLatestHockerItem();
-  }, Math.max(1000, HOCKER_RELAY_INTERVAL_MS));
+  const scheduleRelay = (delayMs: number) => {
+    if (relayTimer) {
+      clearTimeout(relayTimer);
+    }
+    relayTimer = setTimeout(() => {
+      void runRelayTick();
+    }, delayMs);
+  };
+
+  const runRelayTick = async () => {
+    const reachable = await relayLatestHockerItem();
+    if (!reachable) {
+      if (!hockerUnavailable) {
+        hockerUnavailable = true;
+        console.warn(`[relay] Hocker unavailable at ${HOCKER_LATEST_URL}; retrying every ${Math.round(HOCKER_UNAVAILABLE_RETRY_MS / 1000)}s`);
+      }
+      scheduleRelay(HOCKER_UNAVAILABLE_RETRY_MS);
+      return;
+    }
+
+    if (hockerUnavailable) {
+      hockerUnavailable = false;
+      console.log("[relay] Hocker connection restored");
+    }
+    scheduleRelay(Math.max(1000, HOCKER_RELAY_INTERVAL_MS));
+  };
+
+  void runRelayTick();
 
   httpServer.on("close", () => {
     if (relayTimer) {
-      clearInterval(relayTimer);
+      clearTimeout(relayTimer);
       relayTimer = null;
     }
   });
