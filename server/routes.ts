@@ -193,7 +193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       xPosition,
       yPosition,
       sourceUrl,
-      sourceLabel: "🔗",
+      sourceLabel: "HN",
       storyUrl: storyUrl || undefined,
       storyLabel: storyUrl ? "Story" : undefined,
     });
@@ -206,7 +206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       xPosition,
       yPosition,
       sourceUrl,
-      sourceLabel: "🔗",
+      sourceLabel: "HN",
       storyUrl: storyUrl || undefined,
       storyLabel: storyUrl ? "Story" : undefined,
       serverPrepared: true,

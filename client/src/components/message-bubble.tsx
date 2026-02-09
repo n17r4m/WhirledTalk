@@ -120,7 +120,12 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
             href={message.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`font-semibold underline ${getSizeClass(fontSize)}`}
+            className={
+              message.sourceLabel === 'HN'
+                ? 'ml-1 inline-flex items-center rounded-full border border-slate-300/30 bg-slate-800/70 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-200 no-underline transition-colors hover:border-slate-200/50 hover:bg-slate-700/80 hover:text-white'
+                : `ml-1 inline-flex items-center rounded-full border border-current/30 px-2 py-0.5 text-[10px] font-semibold no-underline opacity-85 hover:opacity-100`
+            }
+            aria-label={`Source: ${message.sourceLabel}`}
           >
             {message.sourceLabel}
           </a>
