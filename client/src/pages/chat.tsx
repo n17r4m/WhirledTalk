@@ -247,7 +247,7 @@ export default function Chat() {
             room: wsMessage.room,
             isTyping: false,
             timestamp: new Date(),
-            xPosition: 0,
+            xPosition: wsMessage.xPosition ?? 0,
             yPosition,
             userColor: wsMessage.userColor, // Include style from sender
             fontSize: wsMessage.fontSize,   // Include style from sender

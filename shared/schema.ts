@@ -42,6 +42,7 @@ export const wsMessageSchema = z.object({
   content: z.string().optional(),
   room: z.string().default("global"),
   isTyping: z.boolean().optional(),
+  xPosition: z.number().optional(),
   yPosition: z.number().optional(),
   userColor: z.string().optional(),
   fontSize: z.string().optional(),

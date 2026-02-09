@@ -19,7 +19,7 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
       
       // Only start animation for completed messages, not typing ones
       if (!isTyping) {
-        element.style.right = '0px'; // Start from right edge
+        element.style.right = `${message.xPosition ?? 0}px`; // Spawn slightly off-screen for smooth entry
         element.style.left = 'auto';
         
         // Animate to the left
@@ -38,7 +38,7 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         };
       } else {
         // For typing messages, position at right edge without animation
-        element.style.right = '0px';
+        element.style.right = `${message.xPosition ?? 0}px`;
         element.style.left = 'auto';
         element.style.transform = 'translateX(0)';
       }
