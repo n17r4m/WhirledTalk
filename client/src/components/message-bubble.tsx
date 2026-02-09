@@ -16,18 +16,29 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
     if (elementRef.current) {
       const element = elementRef.current;
       element.style.top = `${message.yPosition}%`;
+      const configuredRight = message.xPosition ?? 0;
       
       // Only start animation for completed messages, not typing ones
       if (!isTyping) {
-        element.style.right = `${message.xPosition ?? 0}px`; // Spawn slightly off-screen for smooth entry
+        // For server relays (negative configured x), ensure the entire bubble starts just off-screen right.
+        const measuredWidth = Math.max(1, element.offsetWidth);
+        const fullyOffscreenRight = -(measuredWidth + 10);
+        const spawnRight = configuredRight < 0
+          ? Math.min(configuredRight, fullyOffscreenRight)
+          : configuredRight;
+        element.style.right = `${spawnRight}px`;
         element.style.left = 'auto';
+
+        // Longer messages should move slower (inverse of previous behavior).
+        const contentLength = (message.content || '').length;
+        const duration = Math.min(90000, Math.max(12000, 12000 + contentLength * 95));
         
         // Animate to the left
         const animation = element.animate([
           { transform: 'translateX(0)' },
           { transform: 'translateX(calc(-100vw - 100%))' }
         ], {
-          duration: 20000, // 20 seconds to cross screen
+          duration,
           easing: 'linear',
           fill: 'forwards'
         });
@@ -38,12 +49,12 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         };
       } else {
         // For typing messages, position at right edge without animation
-        element.style.right = `${message.xPosition ?? 0}px`;
+        element.style.right = `${configuredRight}px`;
         element.style.left = 'auto';
         element.style.transform = 'translateX(0)';
       }
     }
-  }, [message.yPosition, isTyping]);
+  }, [message.yPosition, message.xPosition, message.content, isTyping]);
 
   const getUserColor = (username: string, customColor?: string) => {
     if (customColor) {

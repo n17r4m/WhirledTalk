@@ -183,7 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const baseYPosition = Math.floor(18 + Math.random() * 55);
     const yPosition = Math.min(85, baseYPosition);
     const storyUrl = item.type === "story" && item.url ? item.url : null;
-    const xPosition = -Math.floor(140 + Math.random() * 140);
+    const xPosition = -10;
 
     await storage.addMessage({
       username,
