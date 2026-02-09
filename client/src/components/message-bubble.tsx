@@ -11,11 +11,20 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message, isTyping = false, className = '', userColor, fontSize }: MessageBubbleProps) {
   const elementRef = useRef<HTMLDivElement>(null);
+  const getStableJitterRem = () => {
+    const seedBase = isTyping
+      ? `${message.username}:${message.room}:typing`
+      : `${message.id}:${message.username}:${message.content}`;
+    const hash = seedBase.split('').reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 0);
+    const normalized = (hash % 1001) / 1000; // 0..1
+    return normalized - 0.5; // -0.5rem .. +0.5rem
+  };
 
   useEffect(() => {
     if (elementRef.current) {
       const element = elementRef.current;
-      element.style.top = `${message.yPosition}%`;
+      const jitterRem = getStableJitterRem().toFixed(3);
+      element.style.top = `calc(${message.yPosition}% + ${jitterRem}rem)`;
       const configuredRight = message.xPosition ?? 0;
       
       // Only start animation for completed messages, not typing ones
@@ -54,7 +63,7 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         element.style.transform = 'translateX(0)';
       }
     }
-  }, [message.yPosition, message.xPosition, message.content, isTyping]);
+  }, [message.yPosition, message.xPosition, message.content, message.id, message.username, message.room, isTyping]);
 
   const getUserColor = (username: string, customColor?: string) => {
     if (customColor) {
