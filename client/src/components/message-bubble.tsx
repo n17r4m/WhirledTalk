@@ -7,10 +7,12 @@ interface MessageBubbleProps {
   className?: string;
   userColor?: string;
   fontSize?: string;
+  onExpired?: (message: Message) => void;
 }
 
-export function MessageBubble({ message, isTyping = false, className = '', userColor, fontSize }: MessageBubbleProps) {
+export function MessageBubble({ message, isTyping = false, className = '', userColor, fontSize, onExpired }: MessageBubbleProps) {
   const elementRef = useRef<HTMLDivElement>(null);
+  const expiredNotifiedRef = useRef(false);
   const getStableJitterRem = () => {
     const seedBase = isTyping
       ? `${message.username}:${message.room}:typing`
@@ -52,6 +54,13 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
           fill: 'forwards'
         });
 
+        animation.onfinish = () => {
+          if (!expiredNotifiedRef.current) {
+            expiredNotifiedRef.current = true;
+            onExpired?.(message);
+          }
+        };
+
         // Clean up animation on unmount
         return () => {
           animation.cancel();
@@ -63,7 +72,7 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         element.style.transform = 'translateX(0)';
       }
     }
-  }, [message.yPosition, message.xPosition, message.content, message.id, message.username, message.room, isTyping]);
+  }, [message.yPosition, message.xPosition, message.content, message.id, message.username, message.room, isTyping, onExpired]);
 
   const getUserColor = (username: string, customColor?: string) => {
     if (customColor) {

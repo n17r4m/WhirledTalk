@@ -7,9 +7,10 @@ interface ChatViewportProps {
   typingMessages: Map<string, { content: string; yPosition: number; username: string; color?: string; fontSize?: string }>;
   currentUser?: string;
   userSettings?: { color: string; fontSize: string };
+  onMessageExpired?: (message: Message) => void;
 }
 
-export function ChatViewport({ messages, typingMessages, currentUser, userSettings }: ChatViewportProps) {
+export function ChatViewport({ messages, typingMessages, currentUser, userSettings, onMessageExpired }: ChatViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export function ChatViewport({ messages, typingMessages, currentUser, userSettin
             message={message}
             userColor={message.userColor || (message.username === currentUser ? userSettings?.color : undefined)}
             fontSize={message.fontSize || (message.username === currentUser ? userSettings?.fontSize : undefined)}
+            onExpired={onMessageExpired}
           />
         ))}
         

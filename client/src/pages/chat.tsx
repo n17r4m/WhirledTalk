@@ -33,6 +33,8 @@ export default function Chat() {
     const saved = localStorage.getItem('whirledtalk-text-color');
     return saved || params.color;
   });
+  const MESSAGE_LIFETIME_MS = 25000;
+  const getTravelDurationMs = (content: string) => Math.min(90000, Math.max(12000, 12000 + content.length * 95));
 
   // Update URL params when preferences change
   useEffect(() => {
@@ -93,10 +95,20 @@ export default function Chat() {
     };
   }, []);
 
+  // Periodic cleanup for position occupancy; keeps placement data fresh without hot-path state churn.
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      setOccupiedPositions((prev) => prev.filter((pos) => now - pos.timestamp < MESSAGE_LIFETIME_MS));
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
   // Smart positioning algorithm
   const findOptimalPosition = useCallback((): number => {
     const now = Date.now();
-    const messageLifetime = 25000;
+    const messageLifetime = MESSAGE_LIFETIME_MS;
     const messageHeight = 6;
     const minSpacing = 5;
     const topBound = 6;
@@ -105,7 +117,6 @@ export default function Chat() {
     const yMax = bottomBound - messageHeight;
 
     const activeCompleted = occupiedPositions.filter((pos) => now - pos.timestamp < messageLifetime);
-    setOccupiedPositions(activeCompleted);
 
     // Include currently typing lines as active occupancy to prevent clustering while composing.
     const activeTyping = Array.from(typingMessages.values()).map((typing) => ({
@@ -176,6 +187,43 @@ export default function Chat() {
 
     return Math.max(yMin, Math.min(yMax, topCandidates[0]?.yPosition ?? (yMin + yMax) / 2));
   }, [occupiedPositions, typingMessages]);
+
+  const handleMessageExpired = useCallback((expiredMessage: Message) => {
+    const expiredTimestamp = new Date(expiredMessage.timestamp).getTime();
+    setMessages((prev) => prev.filter((message) => {
+      return !(
+        message.id === expiredMessage.id &&
+        message.username === expiredMessage.username &&
+        message.content === expiredMessage.content &&
+        new Date(message.timestamp).getTime() === expiredTimestamp
+      );
+    }));
+  }, []);
+
+  // Fallback sweeper in case animation finish events are dropped by the browser.
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      const now = Date.now();
+      setMessages((prev) => {
+        const active = prev.filter((message) => {
+          const startedAt = new Date(message.timestamp).getTime();
+          if (!Number.isFinite(startedAt)) return true;
+          const expiresAt = startedAt + getTravelDurationMs(message.content || '') + 4000;
+          return now < expiresAt;
+        });
+
+        if (active.length > 450) {
+          return [...active]
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+            .slice(-450);
+        }
+
+        return active.length === prev.length ? prev : active;
+      });
+    }, 1500);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   const handleWebSocketMessage = useCallback((wsMessage: WSMessage) => {
     switch (wsMessage.type) {
@@ -458,6 +506,7 @@ export default function Chat() {
         typingMessages={typingMessages}
         currentUser={username}
         userSettings={{ color: textColor, fontSize }}
+        onMessageExpired={handleMessageExpired}
       />
       
       <CustomizationBar
