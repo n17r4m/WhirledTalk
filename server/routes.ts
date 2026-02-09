@@ -88,45 +88,6 @@ const RELAY_TICK_MS = 12;
 const RELAY_MAX_EVENTS_PER_TICK = 16;
 const RELAY_MAX_EVENTS_PER_JOB_PER_TICK = 3;
 
-const nearbyKeyMap: Record<string, string[]> = {
-  a: ["s", "q", "w", "z"],
-  b: ["v", "g", "h", "n"],
-  c: ["x", "d", "f", "v"],
-  d: ["s", "e", "r", "f", "c", "x"],
-  e: ["w", "s", "d", "r"],
-  f: ["d", "r", "t", "g", "v", "c"],
-  g: ["f", "t", "y", "h", "b", "v"],
-  h: ["g", "y", "u", "j", "n", "b"],
-  i: ["u", "j", "k", "o"],
-  j: ["h", "u", "i", "k", "n", "m"],
-  k: ["j", "i", "o", "l", "m"],
-  l: ["k", "o", "p"],
-  m: ["n", "j", "k"],
-  n: ["b", "h", "j", "m"],
-  o: ["i", "k", "l", "p"],
-  p: ["o", "l"],
-  q: ["w", "a"],
-  r: ["e", "d", "f", "t"],
-  s: ["a", "w", "e", "d", "x", "z"],
-  t: ["r", "f", "g", "y"],
-  u: ["y", "h", "j", "i"],
-  v: ["c", "f", "g", "b"],
-  w: ["q", "a", "s", "e"],
-  x: ["z", "s", "d", "c"],
-  y: ["t", "g", "h", "u"],
-  z: ["a", "s", "x"],
-};
-
-const pickTypoChar = (char: string) => {
-  const lower = char.toLowerCase();
-  const nearby = nearbyKeyMap[lower];
-  if (!nearby?.length) {
-    return "";
-  }
-  const typo = nearby[randInt(0, nearby.length - 1)];
-  return char === lower ? typo : typo.toUpperCase();
-};
-
 const calcTypingDelay = ({
   char,
   nextChar,
@@ -158,16 +119,6 @@ const calcTypingDelay = ({
   }
 
   return clamp(Math.round(delay), 8, 360);
-};
-
-const shouldInjectTypo = (char: string, typedLength: number, totalLength: number) => {
-  if (!/[a-z]/i.test(char)) {
-    return false;
-  }
-  if (typedLength < 4 || typedLength > totalLength - 3) {
-    return false;
-  }
-  return chance(0.03);
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -356,17 +307,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const char = messageText[i];
       const nextChar = messageText[i + 1] || "";
-
-      if (shouldInjectTypo(char, current.length, messageText.length)) {
-        const typoChar = pickTypoChar(char);
-        if (typoChar) {
-          current += typoChar;
-          pushFrame(current, randInt(6, 24));
-
-          current = current.slice(0, -1);
-          pushFrame(current, randInt(8, 30));
-        }
-      }
 
       current += char;
       burstRemaining -= 1;
