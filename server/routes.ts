@@ -18,11 +18,8 @@ interface ExtendedWebSocket extends WebSocket {
 const activeSessions = new Map<string, UserSession>(); // sessionId -> session
 const usernameOwnership = new Map<string, string>(); // "room:username" -> sessionId
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-const HOCKER_BASE_URL = (process.env.HOCKER_URL || "http://maou:3000").replace(/\/+$/, "");
-const HOCKER_LATEST_URL = (process.env.HOCKER_LATEST_URL || `${HOCKER_BASE_URL}/api/hn/latest`).replace(/([^:]\/)\/+/g, "$1");
 const HOCKER_RELAY_ROOM = process.env.HOCKER_RELAY_ROOM || "global";
-const HOCKER_RELAY_INTERVAL_MS = Number.parseInt(process.env.HOCKER_RELAY_INTERVAL_MS || "3000", 10);
-const HOCKER_UNAVAILABLE_RETRY_MS = 2 * 60 * 1000;
+const HOCKER_PUSH_TOKEN = process.env.HOCKER_PUSH_TOKEN || "";
 
 type HockerLatestItem = {
   hnId: number;
@@ -30,10 +27,6 @@ type HockerLatestItem = {
   title?: string | null;
   text?: string | null;
   sourceUrl?: string | null;
-};
-
-type HockerLatestResponse = {
-  item: HockerLatestItem | null;
 };
 
 const decodeEntities = (value: string) =>
@@ -77,10 +70,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Track connected clients
   const clients = new Set<ExtendedWebSocket>();
-  let lastRelayedHnId: number | null = null;
-  let relayTimer: NodeJS.Timeout | null = null;
   let relayTypingQueue: Promise<void> = Promise.resolve();
-  let hockerUnavailable = false;
+  const lastRelayedVersion = new Map<number, string>();
   
   // Clean up expired sessions periodically
   setInterval(() => {
@@ -157,6 +148,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(messages);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+  });
+
+  const relayHockerItem = async (item: HockerLatestItem, room: string) => {
+    if (!item || !Number.isFinite(item.hnId)) {
+      return;
+    }
+
+    const version = [
+      item.hnId,
+      item.title || "",
+      item.text || "",
+      item.sourceUrl || "",
+    ].join("|");
+    if (lastRelayedVersion.get(item.hnId) === version) {
+      return;
+    }
+    lastRelayedVersion.set(item.hnId, version);
+    if (lastRelayedVersion.size > 5000) {
+      const oldestKey = lastRelayedVersion.keys().next().value;
+      if (oldestKey !== undefined) {
+        lastRelayedVersion.delete(oldestKey);
+      }
+    }
+
+    const username = `HN:${item.by || "unknown"}`;
+    const textParagraphs = item.text ? htmlToParagraphs(item.text) : [];
+    const titleLine = stripHtml(item.title || "");
+    const bodyLines = textParagraphs.length ? textParagraphs : (titleLine ? [titleLine] : []);
+    const sourceUrl = item.sourceUrl || `https://news.ycombinator.com/item?id=${item.hnId}`;
+    const lines = [...bodyLines.map((line) => truncate(line, 160)), `[HN #${item.hnId}] ${sourceUrl}`];
+    const baseYPosition = Math.floor(18 + Math.random() * 55);
+
+    const relayAsTyping = async () => {
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+        const content = lines[lineIndex];
+        const yPosition = Math.min(85, baseYPosition + lineIndex * 8);
+        const words = content.split(/\s+/).filter(Boolean);
+        const step = Math.max(1, Math.ceil(words.length / 22));
+
+        for (let i = step; i <= words.length; i += step) {
+          const partial = words.slice(0, i).join(" ");
+          broadcastToRoom(room, {
+            type: "keystroke",
+            username,
+            content: partial,
+            room,
+            isTyping: true,
+            yPosition,
+          });
+          await sleep(170);
+        }
+
+        await storage.addMessage({
+          username,
+          content,
+          room,
+          isTyping: false,
+          xPosition: 0,
+          yPosition,
+        });
+
+        broadcastToRoom(room, {
+          type: "newMessage",
+          username,
+          content,
+          room,
+          yPosition,
+        });
+
+        await sleep(300);
+      }
+    };
+
+    relayTypingQueue = relayTypingQueue.then(relayAsTyping).catch((error) => {
+      console.error("[relay] typing simulation failed", error);
+    });
+  };
+
+  app.post('/api/relay/hn-item', async (req, res) => {
+    try {
+      if (HOCKER_PUSH_TOKEN) {
+        const token = req.header('x-hocker-token') || "";
+        if (token !== HOCKER_PUSH_TOKEN) {
+          res.status(401).json({ error: "Unauthorized relay token" });
+          return;
+        }
+      }
+
+      const payload = req.body as { item?: HockerLatestItem; room?: string };
+      const item = payload?.item;
+      if (!item || !Number.isFinite(item.hnId)) {
+        res.status(400).json({ error: "Expected payload { item: { hnId, ... } }" });
+        return;
+      }
+
+      const room = payload.room || HOCKER_RELAY_ROOM;
+      await relayHockerItem(item, room);
+      res.json({ ok: true, hnId: item.hnId, room });
+    } catch (error) {
+      console.error("[relay] inbound HN push failed", error);
+      res.status(500).json({ error: "Failed to process HN relay item" });
     }
   });
 
@@ -413,121 +506,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   }
-
-  const relayLatestHockerItem = async () => {
-    try {
-      const response = await fetch(HOCKER_LATEST_URL, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        return false;
-      }
-
-      const payload = await response.json() as HockerLatestResponse;
-      const item = payload?.item;
-      if (!item || !Number.isFinite(item.hnId)) {
-        return;
-      }
-      if (item.hnId === lastRelayedHnId) {
-        return;
-      }
-
-      lastRelayedHnId = item.hnId;
-
-      const username = `HN:${item.by || "unknown"}`;
-      const textParagraphs = item.text ? htmlToParagraphs(item.text) : [];
-      const titleLine = stripHtml(item.title || "");
-      const bodyLines = textParagraphs.length ? textParagraphs : (titleLine ? [titleLine] : []);
-      const sourceUrl = item.sourceUrl || `https://news.ycombinator.com/item?id=${item.hnId}`;
-      const lines = [...bodyLines.map((line) => truncate(line, 160)), `[HN #${item.hnId}] ${sourceUrl}`];
-      const baseYPosition = Math.floor(18 + Math.random() * 55);
-
-      const relayAsTyping = async () => {
-        for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-          const content = lines[lineIndex];
-          const yPosition = Math.min(85, baseYPosition + lineIndex * 8);
-          const words = content.split(/\s+/).filter(Boolean);
-          const step = Math.max(1, Math.ceil(words.length / 22));
-
-          for (let i = step; i <= words.length; i += step) {
-            const partial = words.slice(0, i).join(" ");
-            broadcastToRoom(HOCKER_RELAY_ROOM, {
-              type: "keystroke",
-              username,
-              content: partial,
-              room: HOCKER_RELAY_ROOM,
-              isTyping: true,
-              yPosition,
-            });
-            await sleep(170);
-          }
-
-          await storage.addMessage({
-            username,
-            content,
-            room: HOCKER_RELAY_ROOM,
-            isTyping: false,
-            xPosition: 0,
-            yPosition,
-          });
-          
-          broadcastToRoom(HOCKER_RELAY_ROOM, {
-            type: "newMessage",
-            username,
-            content,
-            room: HOCKER_RELAY_ROOM,
-            yPosition,
-          });
-          
-          await sleep(300);
-        }
-      };
-
-      relayTypingQueue = relayTypingQueue.then(relayAsTyping).catch((error) => {
-        console.error("[relay] typing simulation failed", error);
-      });
-      return true;
-    } catch (error) {
-      return false;
-    }
-  };
-
-  const scheduleRelay = (delayMs: number) => {
-    if (relayTimer) {
-      clearTimeout(relayTimer);
-    }
-    relayTimer = setTimeout(() => {
-      void runRelayTick();
-    }, delayMs);
-  };
-
-  const runRelayTick = async () => {
-    const reachable = await relayLatestHockerItem();
-    if (!reachable) {
-      if (!hockerUnavailable) {
-        hockerUnavailable = true;
-        console.warn(`[relay] Hocker unavailable at ${HOCKER_LATEST_URL}; retrying every ${Math.round(HOCKER_UNAVAILABLE_RETRY_MS / 1000)}s`);
-      }
-      scheduleRelay(HOCKER_UNAVAILABLE_RETRY_MS);
-      return;
-    }
-
-    if (hockerUnavailable) {
-      hockerUnavailable = false;
-      console.log("[relay] Hocker connection restored");
-    }
-    scheduleRelay(Math.max(1000, HOCKER_RELAY_INTERVAL_MS));
-  };
-
-  void runRelayTick();
-
-  httpServer.on("close", () => {
-    if (relayTimer) {
-      clearTimeout(relayTimer);
-      relayTimer = null;
-    }
-  });
 
   return httpServer;
 }
