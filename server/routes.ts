@@ -18,6 +18,24 @@ interface ExtendedWebSocket extends WebSocket {
 const activeSessions = new Map<string, UserSession>(); // sessionId -> session
 const usernameOwnership = new Map<string, string>(); // "room:username" -> sessionId
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const HOCKER_LATEST_URL = process.env.HOCKER_LATEST_URL || "http://localhost:3000/api/hn/latest";
+const HOCKER_RELAY_ROOM = process.env.HOCKER_RELAY_ROOM || "global";
+const HOCKER_RELAY_INTERVAL_MS = Number.parseInt(process.env.HOCKER_RELAY_INTERVAL_MS || "3000", 10);
+
+type HockerLatestItem = {
+  hnId: number;
+  by?: string | null;
+  title?: string | null;
+  text?: string | null;
+  sourceUrl?: string | null;
+};
+
+type HockerLatestResponse = {
+  item: HockerLatestItem | null;
+};
+
+const stripHtml = (value: string) => value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+const truncate = (value: string, max = 160) => (value.length > max ? `${value.slice(0, max - 1).trimEnd()}...` : value);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -27,6 +45,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Track connected clients
   const clients = new Set<ExtendedWebSocket>();
+  let lastRelayedHnId: number | null = null;
+  let relayTimer: NodeJS.Timeout | null = null;
   
   // Clean up expired sessions periodically
   setInterval(() => {
@@ -359,6 +379,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   }
+
+  const relayLatestHockerItem = async () => {
+    try {
+      const response = await fetch(HOCKER_LATEST_URL, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = await response.json() as HockerLatestResponse;
+      const item = payload?.item;
+      if (!item || !Number.isFinite(item.hnId)) {
+        return;
+      }
+      if (item.hnId === lastRelayedHnId) {
+        return;
+      }
+
+      lastRelayedHnId = item.hnId;
+
+      const username = `HN:${item.by || "unknown"}`;
+      const fallbackText = item.title?.trim() || stripHtml(item.text || "") || `HN item #${item.hnId}`;
+      const sourceUrl = item.sourceUrl || `https://news.ycombinator.com/item?id=${item.hnId}`;
+      const content = `${truncate(fallbackText)} [HN #${item.hnId}] ${sourceUrl}`;
+      const yPosition = Math.floor(18 + Math.random() * 60);
+
+      await storage.addMessage({
+        username,
+        content,
+        room: HOCKER_RELAY_ROOM,
+        isTyping: false,
+        xPosition: 0,
+        yPosition,
+      });
+
+      broadcastToRoom(HOCKER_RELAY_ROOM, {
+        type: "newMessage",
+        username,
+        content,
+        room: HOCKER_RELAY_ROOM,
+        yPosition,
+      });
+    } catch (error) {
+      console.error("[relay] failed to ingest Hocker item", error);
+    }
+  };
+
+  void relayLatestHockerItem();
+  relayTimer = setInterval(() => {
+    void relayLatestHockerItem();
+  }, Math.max(1000, HOCKER_RELAY_INTERVAL_MS));
+
+  httpServer.on("close", () => {
+    if (relayTimer) {
+      clearInterval(relayTimer);
+      relayTimer = null;
+    }
+  });
 
   return httpServer;
 }
