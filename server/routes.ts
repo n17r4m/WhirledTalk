@@ -438,7 +438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const username = `HN:${item.by || "unknown"}`;
       const textParagraphs = item.text ? htmlToParagraphs(item.text) : [];
       const titleLine = stripHtml(item.title || "");
-      const bodyLines = textParagraphs.length ? textParagraphs : (titleLine ? [titleLine] : [`HN item #${item.hnId}`]);
+      const bodyLines = textParagraphs.length ? textParagraphs : (titleLine ? [titleLine] : []);
       const sourceUrl = item.sourceUrl || `https://news.ycombinator.com/item?id=${item.hnId}`;
       const lines = [...bodyLines.map((line) => truncate(line, 160)), `[HN #${item.hnId}] ${sourceUrl}`];
       const baseYPosition = Math.floor(18 + Math.random() * 55);
@@ -460,7 +460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               isTyping: true,
               yPosition,
             });
-            await sleep(70);
+            await sleep(170);
           }
 
           await storage.addMessage({
@@ -471,7 +471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             xPosition: 0,
             yPosition,
           });
-
+          
           broadcastToRoom(HOCKER_RELAY_ROOM, {
             type: "newMessage",
             username,
@@ -479,7 +479,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             room: HOCKER_RELAY_ROOM,
             yPosition,
           });
-          await sleep(100);
+          
+          await sleep(300);
         }
       };
 
