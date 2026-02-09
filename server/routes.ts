@@ -180,8 +180,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const bodyText = textParagraphs.length ? textParagraphs.join(" ") : "";
     const messageText = titleLine || bodyText || `HN item #${item.hnId}`;
     const sourceUrl = item.sourceUrl || `https://news.ycombinator.com/item?id=${item.hnId}`;
-    const baseYPosition = Math.floor(18 + Math.random() * 55);
-    const yPosition = Math.min(85, baseYPosition);
+    const baseYPosition = Math.floor(6 + Math.random() * 82);
+    const yPosition = Math.min(92, baseYPosition);
     const storyUrl = item.type === "story" && item.url ? item.url : null;
     const xPosition = -10;
 

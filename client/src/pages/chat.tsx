@@ -96,106 +96,86 @@ export default function Chat() {
   // Smart positioning algorithm
   const findOptimalPosition = useCallback((): number => {
     const now = Date.now();
-    const messageLifetime = 25000; // 25 seconds for messages to cross screen
-    const minSpacing = 8; // Minimum percentage spacing between messages
-    const messageHeight = 6; // Approximate message height in percentage
-    const viewportUsable = 70; // Use 70% of viewport (15% margin top/bottom)
-    const viewportStart = 15; // Start at 15% from top
-    
-    // Clean up expired positions
-    const activePositions = occupiedPositions.filter(pos => 
-      now - pos.timestamp < messageLifetime
-    );
-    
-    // Update state with cleaned positions
-    setOccupiedPositions(activePositions);
-    
-    // Sort positions by Y coordinate
-    const sortedPositions = [...activePositions].sort((a, b) => a.yPosition - b.yPosition);
-    
-    // Try to find gaps between existing messages
-    const candidates: Array<{ yPosition: number; score: number }> = [];
-    
-    // Add position before first message
-    if (sortedPositions.length === 0 || sortedPositions[0].yPosition > viewportStart + messageHeight + minSpacing) {
-      const pos = viewportStart + Math.random() * 20; // Some randomness in top area
-      candidates.push({ yPosition: pos, score: 100 - Math.abs(pos - 30) }); // Prefer middle-ish
+    const messageLifetime = 25000;
+    const messageHeight = 6;
+    const minSpacing = 5;
+    const topBound = 6;
+    const bottomBound = 92;
+    const yMin = topBound;
+    const yMax = bottomBound - messageHeight;
+
+    const activeCompleted = occupiedPositions.filter((pos) => now - pos.timestamp < messageLifetime);
+    setOccupiedPositions(activeCompleted);
+
+    // Include currently typing lines as active occupancy to prevent clustering while composing.
+    const activeTyping = Array.from(typingMessages.values()).map((typing) => ({
+      yPosition: typing.yPosition,
+      timestamp: now,
+      height: messageHeight,
+    }));
+
+    const activePositions = [...activeCompleted, ...activeTyping];
+    if (activePositions.length === 0) {
+      return yMin + Math.random() * (yMax - yMin);
     }
-    
-    // Look for gaps between messages
-    for (let i = 0; i < sortedPositions.length - 1; i++) {
-      const current = sortedPositions[i];
-      const next = sortedPositions[i + 1];
-      const gapSize = next.yPosition - (current.yPosition + current.height);
-      
-      if (gapSize >= messageHeight + minSpacing * 2) {
-        // Found a suitable gap
-        const gapStart = current.yPosition + current.height + minSpacing;
-        const gapEnd = next.yPosition - messageHeight - minSpacing;
-        const centerPos = gapStart + (gapEnd - gapStart) / 2;
-        
-        // Add some randomness but prefer center of gap
-        const randomOffset = (Math.random() - 0.5) * Math.min(gapSize * 0.3, 15);
-        const pos = Math.max(gapStart, Math.min(gapEnd, centerPos + randomOffset));
-        
-        // Score based on gap size and position quality
-        const sizeScore = Math.min(gapSize / 20, 1) * 50;
-        const positionScore = 50 - Math.abs(pos - 50) / 2; // Prefer middle of screen
-        candidates.push({ yPosition: pos, score: sizeScore + positionScore });
-      }
-    }
-    
-    // Add position after last message
-    const lastPos = sortedPositions.length > 0 ? sortedPositions[sortedPositions.length - 1] : null;
-    const lastEnd = lastPos ? lastPos.yPosition + lastPos.height : viewportStart;
-    if (lastEnd + messageHeight + minSpacing <= viewportStart + viewportUsable) {
-      const pos = lastEnd + minSpacing + Math.random() * 10;
-      candidates.push({ yPosition: pos, score: 80 - Math.abs(pos - 40) }); // Slight preference for earlier positions
-    }
-    
-    // If no good gaps, create new position with collision avoidance
-    if (candidates.length === 0) {
-      let attempts = 0;
-      while (attempts < 20) {
-        const randomPos = viewportStart + Math.random() * viewportUsable;
-        
-        // Check collision with existing messages
-        const hasCollision = sortedPositions.some(pos => 
-          Math.abs(pos.yPosition - randomPos) < messageHeight + minSpacing
-        );
-        
-        if (!hasCollision) {
-          candidates.push({ yPosition: randomPos, score: 40 + Math.random() * 20 });
-          break;
+
+    const scoreCandidate = (yPosition: number) => {
+      let penalty = 0;
+      let separationScore = 0;
+      let density = 0;
+      let minDistance = Number.POSITIVE_INFINITY;
+
+      for (const pos of activePositions) {
+        const age = now - pos.timestamp;
+        const ageFactor = Math.max(0.25, 1 - age / messageLifetime);
+        const dy = Math.abs(pos.yPosition - yPosition);
+        const softRadius = minSpacing + (pos.height + messageHeight) / 2;
+
+        minDistance = Math.min(minDistance, dy);
+
+        if (dy < softRadius) {
+          const overlap = softRadius - dy;
+          penalty += overlap * overlap * 4.5 * ageFactor;
+        } else {
+          separationScore += Math.min(26, dy - softRadius) * 0.55 * ageFactor;
         }
-        attempts++;
+
+        const sigma = 8.5;
+        density += Math.exp(-(dy * dy) / (2 * sigma * sigma)) * ageFactor;
       }
+
+      const edgeDistance = Math.min(yPosition - yMin, yMax - yPosition);
+      const edgePenalty = edgeDistance < 2 ? (2 - edgeDistance) * 10 : 0;
+      const jitter = (Math.random() - 0.5) * 2.8;
+
+      return minDistance * 1.4 + separationScore - density * 13.5 - penalty - edgePenalty + jitter;
+    };
+
+    const sampleCount = 90;
+    const candidates: Array<{ yPosition: number; score: number }> = [];
+    for (let i = 0; i < sampleCount; i++) {
+      const yPosition = yMin + Math.random() * (yMax - yMin);
+      candidates.push({ yPosition, score: scoreCandidate(yPosition) });
     }
-    
-    // Fall back to completely random if all else fails
-    if (candidates.length === 0) {
-      candidates.push({ 
-        yPosition: viewportStart + Math.random() * viewportUsable, 
-        score: 20 
-      });
-    }
-    
-    // Select best candidate (with slight randomness for organic feel)
+
     const sortedCandidates = candidates.sort((a, b) => b.score - a.score);
-    const topCandidates = sortedCandidates.slice(0, Math.min(3, sortedCandidates.length));
-    const weights = topCandidates.map((_, i) => Math.pow(2, topCandidates.length - i));
-    const totalWeight = weights.reduce((sum, w) => sum + w, 0);
-    
-    let random = Math.random() * totalWeight;
-    for (let i = 0; i < topCandidates.length; i++) {
-      random -= weights[i];
-      if (random <= 0) {
-        return Math.max(viewportStart, Math.min(viewportStart + viewportUsable - messageHeight, topCandidates[i].yPosition));
+    const topCandidates = sortedCandidates.slice(0, 8);
+    const weighted = topCandidates.map((candidate, index) => ({
+      ...candidate,
+      weight: Math.max(0.1, 8 - index) * Math.max(0.2, candidate.score - topCandidates[topCandidates.length - 1].score + 0.35),
+    }));
+    const totalWeight = weighted.reduce((sum, candidate) => sum + candidate.weight, 0);
+
+    let draw = Math.random() * totalWeight;
+    for (const candidate of weighted) {
+      draw -= candidate.weight;
+      if (draw <= 0) {
+        return Math.max(yMin, Math.min(yMax, candidate.yPosition));
       }
     }
-    
-    return topCandidates[0].yPosition;
-  }, [occupiedPositions]);
+
+    return Math.max(yMin, Math.min(yMax, topCandidates[0]?.yPosition ?? (yMin + yMax) / 2));
+  }, [occupiedPositions, typingMessages]);
 
   const handleWebSocketMessage = useCallback((wsMessage: WSMessage) => {
     switch (wsMessage.type) {
