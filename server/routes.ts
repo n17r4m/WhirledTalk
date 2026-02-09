@@ -63,9 +63,92 @@ const htmlToParagraphs = (value: string) => {
 };
 const truncate = (value: string, max = 160) => (value.length > max ? `${value.slice(0, max - 1).trimEnd()}...` : value);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const TYPING_WORDS_PER_SECOND = 100;
-const TYPING_WORDS_PER_TICK = 5;
-const TYPING_TICK_MS = Math.max(10, Math.round((1000 * TYPING_WORDS_PER_TICK) / TYPING_WORDS_PER_SECOND));
+const randInt = (min: number, max: number) => Math.floor(min + Math.random() * (max - min + 1));
+const randFloat = (min: number, max: number) => min + Math.random() * (max - min);
+const chance = (p: number) => Math.random() < p;
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const nearbyKeyMap: Record<string, string[]> = {
+  a: ["s", "q", "w", "z"],
+  b: ["v", "g", "h", "n"],
+  c: ["x", "d", "f", "v"],
+  d: ["s", "e", "r", "f", "c", "x"],
+  e: ["w", "s", "d", "r"],
+  f: ["d", "r", "t", "g", "v", "c"],
+  g: ["f", "t", "y", "h", "b", "v"],
+  h: ["g", "y", "u", "j", "n", "b"],
+  i: ["u", "j", "k", "o"],
+  j: ["h", "u", "i", "k", "n", "m"],
+  k: ["j", "i", "o", "l", "m"],
+  l: ["k", "o", "p"],
+  m: ["n", "j", "k"],
+  n: ["b", "h", "j", "m"],
+  o: ["i", "k", "l", "p"],
+  p: ["o", "l"],
+  q: ["w", "a"],
+  r: ["e", "d", "f", "t"],
+  s: ["a", "w", "e", "d", "x", "z"],
+  t: ["r", "f", "g", "y"],
+  u: ["y", "h", "j", "i"],
+  v: ["c", "f", "g", "b"],
+  w: ["q", "a", "s", "e"],
+  x: ["z", "s", "d", "c"],
+  y: ["t", "g", "h", "u"],
+  z: ["a", "s", "x"],
+};
+
+const pickTypoChar = (char: string) => {
+  const lower = char.toLowerCase();
+  const nearby = nearbyKeyMap[lower];
+  if (!nearby?.length) {
+    return "";
+  }
+  const typo = nearby[randInt(0, nearby.length - 1)];
+  return char === lower ? typo : typo.toUpperCase();
+};
+
+const calcTypingDelay = ({
+  char,
+  nextChar,
+  burstCps,
+}: {
+  char: string;
+  nextChar: string;
+  burstCps: number;
+}) => {
+  let delay = (1000 / burstCps) * randFloat(0.7, 1.5);
+
+  if (char === " ") {
+    delay *= randFloat(0.5, 0.85);
+  }
+  if (/[,:;]/.test(char)) {
+    delay += randInt(70, 260);
+  }
+  if (/[.!?]/.test(char)) {
+    delay += randInt(280, 980);
+  }
+  if (nextChar === "\n") {
+    delay += randInt(220, 600);
+  }
+  if (nextChar && /[A-Z]/.test(nextChar) && char === " ") {
+    delay += randInt(40, 170);
+  }
+  if (chance(0.06) && (char === " " || /[.,!?]/.test(char))) {
+    delay += randInt(180, 950);
+  }
+
+  return clamp(Math.round(delay), 20, 1600);
+};
+
+const shouldInjectTypo = (char: string, typedLength: number, totalLength: number) => {
+  if (!/[a-z]/i.test(char)) {
+    return false;
+  }
+  if (typedLength < 4 || typedLength > totalLength - 3) {
+    return false;
+  }
+  return chance(0.055);
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -191,19 +274,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const storyUrl = item.type === "story" && item.url ? item.url : null;
 
     const relayAsTyping = async () => {
-      const words = messageText.split(/\s+/).filter(Boolean);
-      for (let i = TYPING_WORDS_PER_TICK; i <= words.length; i += TYPING_WORDS_PER_TICK) {
-        const partial = words.slice(0, i).join(" ");
+      let current = "";
+      let burstRemaining = randInt(4, 12);
+      let burstCps = randFloat(6.5, 12.5); // characters per second
+
+      const emit = async (content: string, delayMs: number) => {
         broadcastToRoom(room, {
           type: "keystroke",
           username,
-          content: partial,
+          content,
           room,
           isTyping: true,
           yPosition,
         });
-        await sleep(TYPING_TICK_MS);
+        await sleep(delayMs);
+      };
+
+      await sleep(randInt(180, 900)); // initial thinking pause
+
+      for (let i = 0; i < messageText.length; i++) {
+        if (burstRemaining <= 0) {
+          burstRemaining = randInt(3, 11);
+          burstCps = randFloat(5.8, 13.2);
+          await sleep(randInt(80, 520));
+        }
+
+        const char = messageText[i];
+        const nextChar = messageText[i + 1] || "";
+
+        if (shouldInjectTypo(char, current.length, messageText.length)) {
+          const typoChar = pickTypoChar(char);
+          if (typoChar) {
+            current += typoChar;
+            await emit(current, randInt(25, 130));
+
+            current = current.slice(0, -1);
+            await emit(current, randInt(35, 180));
+          }
+        }
+
+        current += char;
+        burstRemaining -= 1;
+        await emit(current, calcTypingDelay({ char, nextChar, burstCps }));
       }
+
+      await sleep(randInt(90, 420));
       const content = messageText;
 
       await storage.addMessage({
