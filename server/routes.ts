@@ -18,7 +18,7 @@ interface ExtendedWebSocket extends WebSocket {
 const activeSessions = new Map<string, UserSession>(); // sessionId -> session
 const usernameOwnership = new Map<string, string>(); // "room:username" -> sessionId
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-const HOCKER_LATEST_URL = process.env.HOCKER_LATEST_URL || "http://localhost:3000/api/hn/latest";
+const HOCKER_LATEST_URL = process.env.HOCKER_LATEST_URL || "http://maou:3000/api/hn/latest";
 const HOCKER_RELAY_ROOM = process.env.HOCKER_RELAY_ROOM || "global";
 const HOCKER_RELAY_INTERVAL_MS = Number.parseInt(process.env.HOCKER_RELAY_INTERVAL_MS || "3000", 10);
 
