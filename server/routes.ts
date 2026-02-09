@@ -31,6 +31,24 @@ type HockerLatestItem = {
   sourceUrl?: string | null;
 };
 
+type RelayTypingFrame = {
+  content: string;
+  delayMs: number;
+};
+
+type RelayTypingJob = {
+  id: string;
+  username: string;
+  room: string;
+  yPosition: number;
+  sourceUrl: string;
+  storyUrl: string | null;
+  finalContent: string;
+  frames: RelayTypingFrame[];
+  frameIndex: number;
+  nextAt: number;
+};
+
 const decodeEntities = (value: string) =>
   value
     .replace(/&#x27;/g, "'")
@@ -62,11 +80,13 @@ const htmlToParagraphs = (value: string) => {
     .filter(Boolean);
 };
 const truncate = (value: string, max = 160) => (value.length > max ? `${value.slice(0, max - 1).trimEnd()}...` : value);
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const randInt = (min: number, max: number) => Math.floor(min + Math.random() * (max - min + 1));
 const randFloat = (min: number, max: number) => min + Math.random() * (max - min);
 const chance = (p: number) => Math.random() < p;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const RELAY_TICK_MS = 12;
+const RELAY_MAX_EVENTS_PER_TICK = 16;
+const RELAY_MAX_EVENTS_PER_JOB_PER_TICK = 3;
 
 const nearbyKeyMap: Record<string, string[]> = {
   a: ["s", "q", "w", "z"],
@@ -116,28 +136,28 @@ const calcTypingDelay = ({
   nextChar: string;
   burstCps: number;
 }) => {
-  let delay = (1000 / burstCps) * randFloat(0.7, 1.5);
+  let delay = (1000 / burstCps) * randFloat(0.55, 1.05);
 
   if (char === " ") {
-    delay *= randFloat(0.5, 0.85);
+    delay *= randFloat(0.4, 0.72);
   }
   if (/[,:;]/.test(char)) {
-    delay += randInt(70, 260);
+    delay += randInt(12, 70);
   }
   if (/[.!?]/.test(char)) {
-    delay += randInt(280, 980);
+    delay += randInt(40, 180);
   }
   if (nextChar === "\n") {
-    delay += randInt(220, 600);
+    delay += randInt(45, 140);
   }
   if (nextChar && /[A-Z]/.test(nextChar) && char === " ") {
-    delay += randInt(40, 170);
+    delay += randInt(12, 45);
   }
   if (chance(0.06) && (char === " " || /[.,!?]/.test(char))) {
-    delay += randInt(180, 950);
+    delay += randInt(18, 100);
   }
 
-  return clamp(Math.round(delay), 20, 1600);
+  return clamp(Math.round(delay), 8, 360);
 };
 
 const shouldInjectTypo = (char: string, typedLength: number, totalLength: number) => {
@@ -147,7 +167,7 @@ const shouldInjectTypo = (char: string, typedLength: number, totalLength: number
   if (typedLength < 4 || typedLength > totalLength - 3) {
     return false;
   }
-  return chance(0.055);
+  return chance(0.03);
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -158,7 +178,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Track connected clients
   const clients = new Set<ExtendedWebSocket>();
-  let relayTypingQueue: Promise<void> = Promise.resolve();
+  const relayTypingJobs = new Map<string, RelayTypingJob>();
+  let relayJobCounter = 0;
   const lastRelayedVersion = new Map<number, string>();
   
   // Clean up expired sessions periodically
@@ -239,6 +260,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const finalizeRelayTypingJob = async (job: RelayTypingJob) => {
+    await storage.addMessage({
+      username: job.username,
+      content: job.finalContent,
+      room: job.room,
+      isTyping: false,
+      xPosition: 0,
+      yPosition: job.yPosition,
+      sourceUrl: job.sourceUrl,
+      sourceLabel: "HN",
+      storyUrl: job.storyUrl || undefined,
+      storyLabel: job.storyUrl ? "Story" : undefined,
+    });
+
+    broadcastToRoom(job.room, {
+      type: "newMessage",
+      username: job.username,
+      content: job.finalContent,
+      room: job.room,
+      yPosition: job.yPosition,
+      sourceUrl: job.sourceUrl,
+      sourceLabel: "HN",
+      storyUrl: job.storyUrl || undefined,
+      storyLabel: job.storyUrl ? "Story" : undefined,
+      serverPrepared: true,
+    });
+  };
+
+  setInterval(() => {
+    const now = Date.now();
+    const readyJobs = Array.from(relayTypingJobs.values()).filter((job) => job.nextAt <= now);
+    if (!readyJobs.length) {
+      return;
+    }
+
+    let emittedGlobal = 0;
+
+    for (const job of readyJobs) {
+      if (emittedGlobal >= RELAY_MAX_EVENTS_PER_TICK) {
+        break;
+      }
+
+      let emittedForJob = 0;
+      while (
+        emittedForJob < RELAY_MAX_EVENTS_PER_JOB_PER_TICK &&
+        emittedGlobal < RELAY_MAX_EVENTS_PER_TICK &&
+        job.frameIndex < job.frames.length &&
+        job.nextAt <= now
+      ) {
+        const frame = job.frames[job.frameIndex];
+        job.frameIndex += 1;
+        job.nextAt += frame.delayMs;
+
+        broadcastToRoom(job.room, {
+          type: "keystroke",
+          username: job.username,
+          content: frame.content,
+          room: job.room,
+          isTyping: true,
+          yPosition: job.yPosition,
+        });
+
+        emittedForJob += 1;
+        emittedGlobal += 1;
+      }
+
+      if (job.frameIndex >= job.frames.length) {
+        relayTypingJobs.delete(job.id);
+        void finalizeRelayTypingJob(job).catch((error) => {
+          console.error("[relay] finalizing typing job failed", error);
+        });
+      }
+    }
+  }, RELAY_TICK_MS);
+
+  const buildRelayTypingFrames = (messageText: string): RelayTypingFrame[] => {
+    const frames: RelayTypingFrame[] = [];
+    let current = "";
+    let burstRemaining = randInt(7, 18);
+    let burstCps = randFloat(18, 32); // near-superhuman, but still believable
+
+    const pushFrame = (content: string, delayMs: number) => {
+      frames.push({
+        content,
+        delayMs: clamp(delayMs, 6, 360),
+      });
+    };
+
+    for (let i = 0; i < messageText.length; i++) {
+      if (burstRemaining <= 0) {
+        burstRemaining = randInt(6, 16);
+        burstCps = randFloat(17, 34);
+      }
+
+      const char = messageText[i];
+      const nextChar = messageText[i + 1] || "";
+
+      if (shouldInjectTypo(char, current.length, messageText.length)) {
+        const typoChar = pickTypoChar(char);
+        if (typoChar) {
+          current += typoChar;
+          pushFrame(current, randInt(6, 24));
+
+          current = current.slice(0, -1);
+          pushFrame(current, randInt(8, 30));
+        }
+      }
+
+      current += char;
+      burstRemaining -= 1;
+
+      let delay = calcTypingDelay({ char, nextChar, burstCps });
+      if (burstRemaining === 0) {
+        delay += randInt(12, 80);
+      }
+      pushFrame(current, delay);
+    }
+
+    return frames;
+  };
+
   const relayHockerItem = async (item: HockerLatestItem, room: string) => {
     if (!item || !Number.isFinite(item.hnId)) {
       return;
@@ -273,83 +415,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const yPosition = Math.min(85, baseYPosition);
     const storyUrl = item.type === "story" && item.url ? item.url : null;
 
-    const relayAsTyping = async () => {
-      let current = "";
-      let burstRemaining = randInt(4, 12);
-      let burstCps = randFloat(6.5, 12.5); // characters per second
-
-      const emit = async (content: string, delayMs: number) => {
-        broadcastToRoom(room, {
-          type: "keystroke",
-          username,
-          content,
-          room,
-          isTyping: true,
-          yPosition,
-        });
-        await sleep(delayMs);
-      };
-
-      await sleep(randInt(180, 900)); // initial thinking pause
-
-      for (let i = 0; i < messageText.length; i++) {
-        if (burstRemaining <= 0) {
-          burstRemaining = randInt(3, 11);
-          burstCps = randFloat(5.8, 13.2);
-          await sleep(randInt(80, 520));
-        }
-
-        const char = messageText[i];
-        const nextChar = messageText[i + 1] || "";
-
-        if (shouldInjectTypo(char, current.length, messageText.length)) {
-          const typoChar = pickTypoChar(char);
-          if (typoChar) {
-            current += typoChar;
-            await emit(current, randInt(25, 130));
-
-            current = current.slice(0, -1);
-            await emit(current, randInt(35, 180));
-          }
-        }
-
-        current += char;
-        burstRemaining -= 1;
-        await emit(current, calcTypingDelay({ char, nextChar, burstCps }));
-      }
-
-      await sleep(randInt(90, 420));
-      const content = messageText;
-
-      await storage.addMessage({
-        username,
-        content,
-        room,
-        isTyping: false,
-        xPosition: 0,
-        yPosition,
-        sourceUrl,
-        sourceLabel: "HN",
-        storyUrl: storyUrl || undefined,
-        storyLabel: storyUrl ? "Story" : undefined,
-      });
-
-      broadcastToRoom(room, {
-        type: "newMessage",
-        username,
-        content,
-        room,
-        yPosition,
-        sourceUrl,
-        sourceLabel: "HN",
-        storyUrl: storyUrl || undefined,
-        storyLabel: storyUrl ? "Story" : undefined,
-        serverPrepared: true,
-      });
-    };
-
-    relayTypingQueue = relayTypingQueue.then(relayAsTyping).catch((error) => {
-      console.error("[relay] typing simulation failed", error);
+    const jobId = `relay-${Date.now()}-${relayJobCounter++}`;
+    relayTypingJobs.set(jobId, {
+      id: jobId,
+      username,
+      room,
+      yPosition,
+      sourceUrl,
+      storyUrl,
+      finalContent: messageText,
+      frames: buildRelayTypingFrames(messageText),
+      frameIndex: 0,
+      nextAt: Date.now() + randInt(25, 180),
     });
   };
 
