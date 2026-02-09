@@ -216,8 +216,10 @@ export function CustomizationBar({
       onClick={handleClickOutside}
     >
       <div className="flex items-center justify-between gap-4">
+
         {/* User Input Section */}
         <div className="flex-1 flex items-center gap-3">
+          
           {/* Username Input */}
           <div className="flex items-center gap-2">
             <label className="text-xs text-gray-400 font-medium">Name:</label>
@@ -226,7 +228,7 @@ export function CustomizationBar({
                 type="text"
                 value={username}
                 onChange={(e) => onUsernameChange(e.target.value)}
-                className={`bg-gray-700 text-white px-3 py-1 rounded text-sm border focus:outline-none w-32 ${
+                className={`bg-gray-700 text-white px-3 py-1 rounded text-sm border focus:outline-none w-16 ${
                   usernameStatus === 'valid' ? 'border-gray-600 focus:border-blue-500' :
                   usernameStatus === 'pending' ? 'border-yellow-500 focus:border-yellow-400' :
                   'border-red-500 focus:border-red-400'
