@@ -174,7 +174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
-    const username = `HN:${item.by || "unknown"}`;
+    const username = `${item.by || "unknown"}`;
     const textParagraphs = item.text ? htmlToParagraphs(item.text) : [];
     const titleLine = stripHtml(item.title || "");
     const bodyText = textParagraphs.length ? textParagraphs.join(" ") : "";
@@ -193,7 +193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       xPosition,
       yPosition,
       sourceUrl,
-      sourceLabel: "HN",
+      sourceLabel: "🔗",
       storyUrl: storyUrl || undefined,
       storyLabel: storyUrl ? "Story" : undefined,
     });
@@ -206,7 +206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       xPosition,
       yPosition,
       sourceUrl,
-      sourceLabel: "HN",
+      sourceLabel: "🔗",
       storyUrl: storyUrl || undefined,
       storyLabel: storyUrl ? "Story" : undefined,
       serverPrepared: true,
