@@ -23,9 +23,11 @@ const HOCKER_PUSH_TOKEN = process.env.HOCKER_PUSH_TOKEN || "";
 
 type HockerLatestItem = {
   hnId: number;
+  type?: string | null;
   by?: string | null;
   title?: string | null;
   text?: string | null;
+  url?: string | null;
   sourceUrl?: string | null;
 };
 
@@ -61,6 +63,9 @@ const htmlToParagraphs = (value: string) => {
 };
 const truncate = (value: string, max = 160) => (value.length > max ? `${value.slice(0, max - 1).trimEnd()}...` : value);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const TYPING_WORDS_PER_SECOND = 100;
+const TYPING_WORDS_PER_TICK = 5;
+const TYPING_TICK_MS = Math.max(10, Math.round((1000 * TYPING_WORDS_PER_TICK) / TYPING_WORDS_PER_SECOND));
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -158,8 +163,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const version = [
       item.hnId,
+      item.type || "",
       item.title || "",
       item.text || "",
+      item.url || "",
       item.sourceUrl || "",
     ].join("|");
     if (lastRelayedVersion.get(item.hnId) === version) {
@@ -176,50 +183,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const username = `HN:${item.by || "unknown"}`;
     const textParagraphs = item.text ? htmlToParagraphs(item.text) : [];
     const titleLine = stripHtml(item.title || "");
-    const bodyLines = textParagraphs.length ? textParagraphs : (titleLine ? [titleLine] : []);
+    const bodyText = textParagraphs.length ? textParagraphs.join(" ") : "";
+    const messageText = truncate(titleLine || bodyText || `HN item #${item.hnId}`, 220);
     const sourceUrl = item.sourceUrl || `https://news.ycombinator.com/item?id=${item.hnId}`;
-    const lines = [...bodyLines.map((line) => truncate(line, 160)), `[HN #${item.hnId}] ${sourceUrl}`];
     const baseYPosition = Math.floor(18 + Math.random() * 55);
+    const yPosition = Math.min(85, baseYPosition);
+    const storyUrl = item.type === "story" && item.url ? item.url : null;
 
     const relayAsTyping = async () => {
-      for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-        const content = lines[lineIndex];
-        const yPosition = Math.min(85, baseYPosition + lineIndex * 8);
-        const words = content.split(/\s+/).filter(Boolean);
-        const step = Math.max(1, Math.ceil(words.length / 22));
-
-        for (let i = step; i <= words.length; i += step) {
-          const partial = words.slice(0, i).join(" ");
-          broadcastToRoom(room, {
-            type: "keystroke",
-            username,
-            content: partial,
-            room,
-            isTyping: true,
-            yPosition,
-          });
-          await sleep(170);
-        }
-
-        await storage.addMessage({
-          username,
-          content,
-          room,
-          isTyping: false,
-          xPosition: 0,
-          yPosition,
-        });
-
+      const words = messageText.split(/\s+/).filter(Boolean);
+      for (let i = TYPING_WORDS_PER_TICK; i <= words.length; i += TYPING_WORDS_PER_TICK) {
+        const partial = words.slice(0, i).join(" ");
         broadcastToRoom(room, {
-          type: "newMessage",
+          type: "keystroke",
           username,
-          content,
+          content: partial,
           room,
+          isTyping: true,
           yPosition,
         });
-
-        await sleep(300);
+        await sleep(TYPING_TICK_MS);
       }
+      const content = messageText;
+
+      await storage.addMessage({
+        username,
+        content,
+        room,
+        isTyping: false,
+        xPosition: 0,
+        yPosition,
+        sourceUrl,
+        sourceLabel: "HN",
+        storyUrl: storyUrl || undefined,
+        storyLabel: storyUrl ? "Story" : undefined,
+      });
+
+      broadcastToRoom(room, {
+        type: "newMessage",
+        username,
+        content,
+        room,
+        yPosition,
+        sourceUrl,
+        sourceLabel: "HN",
+        storyUrl: storyUrl || undefined,
+        storyLabel: storyUrl ? "Story" : undefined,
+        serverPrepared: true,
+      });
     };
 
     relayTypingQueue = relayTypingQueue.then(relayAsTyping).catch((error) => {
@@ -421,6 +432,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 isTyping: false,
                 xPosition: 0, // Messages start from right edge
                 yPosition: validatedMessage.yPosition,
+                sourceUrl: validatedMessage.sourceUrl,
+                sourceLabel: validatedMessage.sourceLabel,
+                storyUrl: validatedMessage.storyUrl,
+                storyLabel: validatedMessage.storyLabel,
               });
             }
             broadcastToRoom(validatedMessage.room, {
@@ -431,6 +446,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               yPosition: validatedMessage.yPosition,
               userColor: validatedMessage.userColor,
               fontSize: validatedMessage.fontSize,
+              sourceUrl: validatedMessage.sourceUrl,
+              sourceLabel: validatedMessage.sourceLabel,
+              storyUrl: validatedMessage.storyUrl,
+              storyLabel: validatedMessage.storyLabel,
+              serverPrepared: validatedMessage.serverPrepared,
             }, ws);
             break;
             

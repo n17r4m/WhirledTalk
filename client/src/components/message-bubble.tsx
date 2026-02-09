@@ -90,9 +90,30 @@ export function MessageBubble({ message, isTyping = false, className = '', userC
         <span className={`font-medium ${getSizeClass(fontSize)}`}>
           {message.username}
         </span>
-        <span className={`font-mono ${getSizeClass(fontSize)}`}>
-          {message.content}
-        </span>
+        {message.storyUrl && !isTyping ? (
+          <a
+            href={message.storyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`font-mono underline decoration-dotted ${getSizeClass(fontSize)}`}
+          >
+            {message.content}
+          </a>
+        ) : (
+          <span className={`font-mono ${getSizeClass(fontSize)}`}>
+            {message.content}
+          </span>
+        )}
+        {message.sourceUrl && message.sourceLabel && !isTyping && (
+          <a
+            href={message.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`font-semibold underline ${getSizeClass(fontSize)}`}
+          >
+            {message.sourceLabel}
+          </a>
+        )}
         {isTyping && (
           <span className="animate-pulse">|</span>
         )}

@@ -251,6 +251,10 @@ export default function Chat() {
             yPosition,
             userColor: wsMessage.userColor, // Include style from sender
             fontSize: wsMessage.fontSize,   // Include style from sender
+            sourceUrl: wsMessage.sourceUrl || null,
+            sourceLabel: wsMessage.sourceLabel || null,
+            storyUrl: wsMessage.storyUrl || null,
+            storyLabel: wsMessage.storyLabel || null,
           }]);
         }
         break;
@@ -415,6 +419,10 @@ export default function Chat() {
         yPosition,
         userColor: textColor, // Include current style
         fontSize: fontSize,   // Include current style
+        sourceUrl: null,
+        sourceLabel: null,
+        storyUrl: null,
+        storyLabel: null,
       }]);
 
       // Clear typing indicator

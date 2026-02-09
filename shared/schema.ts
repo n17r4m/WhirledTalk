@@ -13,6 +13,10 @@ export const messages = pgTable("messages", {
   yPosition: integer("y_position").notNull(),
   userColor: text("user_color"),
   fontSize: text("font_size"),
+  sourceUrl: text("source_url"),
+  sourceLabel: text("source_label"),
+  storyUrl: text("story_url"),
+  storyLabel: text("story_label"),
 });
 
 export const insertMessageSchema = createInsertSchema(messages).pick({
@@ -22,6 +26,10 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
   isTyping: true,
   xPosition: true,
   yPosition: true,
+  sourceUrl: true,
+  sourceLabel: true,
+  storyUrl: true,
+  storyLabel: true,
 });
 
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
@@ -40,6 +48,11 @@ export const wsMessageSchema = z.object({
   sessionId: z.string().optional(),
   browserFingerprint: z.string().optional(),
   error: z.string().optional(),
+  sourceUrl: z.string().optional(),
+  sourceLabel: z.string().optional(),
+  storyUrl: z.string().optional(),
+  storyLabel: z.string().optional(),
+  serverPrepared: z.boolean().optional(),
 });
 
 export type WSMessage = z.infer<typeof wsMessageSchema>;

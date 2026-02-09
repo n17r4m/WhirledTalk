@@ -41,6 +41,12 @@ export class MemStorage implements IStorage {
       timestamp: new Date(),
       xPosition: insertMessage.xPosition,
       yPosition: insertMessage.yPosition,
+      userColor: null,
+      fontSize: null,
+      sourceUrl: insertMessage.sourceUrl || null,
+      sourceLabel: insertMessage.sourceLabel || null,
+      storyUrl: insertMessage.storyUrl || null,
+      storyLabel: insertMessage.storyLabel || null,
     };
     this.messages.set(id, message);
     return message;
